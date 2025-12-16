@@ -1,0 +1,109 @@
+{
+  "name": "windsurf-auto-mcp",
+  "displayName": "WindsurfAutoMcp",
+  "description": "Windsurf MCP 自动化工具 - 任务完成确认、用户交互、一键配置",
+  "version": "1.0.0",
+  "publisher": "windsurf-auto-mcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JiXiangKing80/windsurf-auto-mcp"
+  },
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other",
+    "Machine Learning"
+  ],
+  "keywords": [
+    "mcp",
+    "windsurf",
+    "ai",
+    "claude"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mcpServicePanel",
+          "title": "WindsurfAutoMcp",
+          "icon": "$(server)"
+        }
+      ]
+    },
+    "views": {
+      "mcpServicePanel": [
+        {
+          "type": "webview",
+          "id": "mcpServicePanel.sidebarView",
+          "name": "控制面板"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "mcpService.startServer",
+        "title": "WindsurfAutoMcp: 启动服务器"
+      },
+      {
+        "command": "mcpService.stopServer",
+        "title": "WindsurfAutoMcp: 停止服务器"
+      },
+      {
+        "command": "mcpService.configWindsurf",
+        "title": "WindsurfAutoMcp: 配置 Windsurf"
+      },
+      {
+        "command": "mcpService.showStats",
+        "title": "WindsurfAutoMcp: 显示统计"
+      },
+      {
+        "command": "mcpService.toggleDialog",
+        "title": "WindsurfAutoMcp: 切换对话框 (Ctrl+M)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "mcpService.toggleDialog",
+        "key": "ctrl+m",
+        "mac": "cmd+m"
+      }
+    ],
+    "configuration": {
+      "title": "WindsurfAutoMcp",
+      "properties": {
+        "mcpService.port": {
+          "type": "number",
+          "default": 3456,
+          "description": "MCP HTTP服务器端口"
+        },
+        "mcpService.autoStart": {
+          "type": "boolean",
+          "default": true,
+          "description": "启动时自动启动服务器"
+        },
+        "mcpService.mode": {
+          "type": "string",
+          "enum": ["http", "stdio"],
+          "default": "http",
+          "description": "MCP服务器模式：http=HTTP模式，stdio=标准输入输出模式"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  }
+}
