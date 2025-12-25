@@ -358,18 +358,25 @@ async function handleAskUser(args: any): Promise<any> {
                         content.push({ type: 'text', text: `用户输入: ${text}` });
                     }
                     // 处理图片（如果有）
-                    if (value.image) {
+                    const images: any[] = Array.isArray(value.images)
+                        ? value.images
+                        : (value.image ? [value.image] : []);
+                    for (const img of images) {
+                        if (!img) continue;
+                        const imgStr = String(img);
                         // 从 data URL 中提取纯 base64 数据
-                        const base64Match = value.image.match(/^data:image\/([^;]+);base64,(.+)$/);
+                        const base64Match = imgStr.match(/^data:image\/([^;]+);base64,(.+)$/);
                         if (base64Match) {
                             const mimeType = `image/${base64Match[1]}`;
                             const base64Data = base64Match[2];
                             content.push({ type: 'image', data: base64Data, mimeType });
                         } else {
                             // 如果不是 data URL 格式，直接使用
-                            content.push({ type: 'image', data: value.image, mimeType: 'image/png' });
+                            content.push({ type: 'image', data: imgStr, mimeType: 'image/png' });
                         }
-                        content.push({ type: 'text', text: '[用户上传了图片]' });
+                    }
+                    if (images.length > 0) {
+                        content.push({ type: 'text', text: `[用户上传了图片 x${images.length}]` });
                     }
                     if (content.length === 0) {
                         content.push({ type: 'text', text: '用户提交了空内容' });
@@ -422,18 +429,25 @@ async function handleAskContinue(args: any): Promise<any> {
                     }
                     content.push({ type: 'text', text });
                     // 处理图片（如果有）
-                    if (value.image) {
+                    const images: any[] = Array.isArray(value.images)
+                        ? value.images
+                        : (value.image ? [value.image] : []);
+                    for (const img of images) {
+                        if (!img) continue;
+                        const imgStr = String(img);
                         // 从 data URL 中提取纯 base64 数据
-                        const base64Match = value.image.match(/^data:image\/([^;]+);base64,(.+)$/);
+                        const base64Match = imgStr.match(/^data:image\/([^;]+);base64,(.+)$/);
                         if (base64Match) {
                             const mimeType = `image/${base64Match[1]}`;
                             const base64Data = base64Match[2];
                             content.push({ type: 'image', data: base64Data, mimeType });
                         } else {
                             // 如果不是 data URL 格式，直接使用
-                            content.push({ type: 'image', data: value.image, mimeType: 'image/png' });
+                            content.push({ type: 'image', data: imgStr, mimeType: 'image/png' });
                         }
-                        content.push({ type: 'text', text: '[用户上传了图片]' });
+                    }
+                    if (images.length > 0) {
+                        content.push({ type: 'text', text: `[用户上传了图片 x${images.length}]` });
                     }
                     resolve({ content });
                 } else {
@@ -738,6 +752,23 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
         .image-preview.show {
             display: block;
         }
+
+        .image-preview-grid {
+            display: none;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+        .image-preview-grid.show {
+            display: grid;
+        }
+        .image-preview-grid img {
+            width: 100%;
+            height: 70px;
+            object-fit: cover;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--border);
+        }
         
         .btn {
             padding: 14px 24px;
@@ -866,9 +897,9 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
                     <div class="icon">🖼️</div>
                     <div>Ctrl+V 粘贴 或 拖放图片到此处</div>
                 </div>
-                <img id="imagePreview" class="image-preview" />
+                <div id="imagePreviewGrid" class="image-preview-grid"></div>
                 <button class="btn btn-outline" onclick="selectImage()">📁 选择图片文件</button>
-                <input type="file" id="fileInput" accept="image/*" style="display:none" />
+                <input type="file" id="fileInput" accept="image/*" multiple style="display:none" />
             </div>
             ` : ''}
         </div>
@@ -891,7 +922,7 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
         const vscode = acquireVsCodeApi();
         const requestId = '${requestId}';
         const isContinue = ${isContinue};
-        let imageData = null;
+        let imagesData = [];
         let imagePath = null;
 
         function showToast(msg) {
@@ -922,7 +953,6 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
                     if (item.type.startsWith('image/')) {
                         const file = item.getAsFile();
                         if (file) handleImageFile(file);
-                        break;
                     }
                 }
             }
@@ -941,9 +971,11 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
             dropZone.addEventListener('drop', (e) => {
                 e.preventDefault();
                 dropZone.classList.remove('dragover');
-                const file = e.dataTransfer?.files[0];
-                if (file && file.type.startsWith('image/')) {
-                    handleImageFile(file);
+                const files = Array.from(e.dataTransfer?.files || []);
+                for (const file of files) {
+                    if (file && file.type.startsWith('image/')) {
+                        handleImageFile(file);
+                    }
                 }
             });
         }
@@ -952,8 +984,10 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
         const fileInput = document.getElementById('fileInput');
         if (fileInput) {
             fileInput.addEventListener('change', (e) => {
-                const file = e.target.files?.[0];
-                if (file) handleImageFile(file);
+                const files = Array.from(e.target.files || []);
+                for (const file of files) {
+                    if (file) handleImageFile(file);
+                }
             });
         }
 
@@ -964,16 +998,32 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
         function handleImageFile(file) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                imageData = e.target?.result;
-                const preview = document.getElementById('imagePreview');
-                if (preview) {
-                    preview.src = imageData;
-                    preview.classList.add('show');
+                const result = e.target?.result;
+                if (typeof result === 'string') {
+                    imagesData.push(result);
                 }
+                renderPreviews();
                 showToast('图片已加载');
                 vscode.postMessage({ type: 'imageUpload' });
             };
             reader.readAsDataURL(file);
+        }
+
+        function renderPreviews() {
+            const grid = document.getElementById('imagePreviewGrid');
+            if (!grid) return;
+
+            grid.innerHTML = '';
+            for (const img of imagesData) {
+                const el = document.createElement('img');
+                el.src = img;
+                grid.appendChild(el);
+            }
+            if (imagesData.length > 0) {
+                grid.classList.add('show');
+            } else {
+                grid.classList.remove('show');
+            }
         }
 
         function submitResponse(confirm) {
@@ -985,14 +1035,14 @@ function getDialogHtml(requestId: string, type: 'continue' | 'input', title: str
                 response = {
                     continue: confirm,
                     instruction: input,
-                    image: imageData && imageType === 'base64' ? imageData : null,
+                    images: imageType === 'base64' ? imagesData : [],
                     imagePath: imagePath
                 };
             } else {
                 if (confirm) {
                     response = {
                         text: input,
-                        image: imageData && imageType === 'base64' ? imageData : null,
+                        images: imageType === 'base64' ? imagesData : [],
                         imagePath: imagePath
                     };
                 } else {
@@ -1164,6 +1214,9 @@ class SidebarProvider implements vscode.WebviewViewProvider {
         webviewView.webview.onDidReceiveMessage(async (message) => {
             outputChannel.appendLine('[SidebarProvider] 收到消息: ' + message.type);
             switch (message.type) {
+                case 'openRepo':
+                    await vscode.env.openExternal(vscode.Uri.parse('https://github.com/JiXiangKing80/windsurf-auto-mcp'));
+                    break;
                 case 'startServer':
                     await startServer();
                     this.refreshContent();
@@ -1679,6 +1732,19 @@ class SidebarProvider implements vscode.WebviewViewProvider {
 </head>
 <body>
     <div class="app">
+        <!-- 开源与免费 -->
+        <div class="card">
+            <div class="section-title">开源与免费</div>
+            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px;">
+                本插件完全免费。开源地址：
+                <span style="color: var(--accent-hover); word-break: break-all;">https://github.com/JiXiangKing80/windsurf-auto-mcp</span>
+            </p>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="openRepo()">打开 GitHub</button>
+                <button class="btn btn-ghost" onclick="copyRepoUrl()">复制链接</button>
+            </div>
+        </div>
+
         <!-- 服务器状态 -->
         <div class="card">
             <div class="section-title">服务器</div>
@@ -1897,6 +1963,18 @@ class SidebarProvider implements vscode.WebviewViewProvider {
             const text = '当你完成一个任务时，必须调用 WindsurfAutoMcp 工具询问用户是否继续。没有例外情况，要一直等待响应不得提前终止任务。';
             navigator.clipboard.writeText(text).then(() => {
                 showToast('提示语已复制', 'success');
+            });
+        }
+
+        function openRepo() {
+            vscode.postMessage({ type: 'openRepo' });
+            showToast('正在打开 GitHub...', 'info');
+        }
+
+        function copyRepoUrl() {
+            const text = 'https://github.com/JiXiangKing80/windsurf-auto-mcp';
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('链接已复制', 'success');
             });
         }
         

@@ -2,7 +2,7 @@
   "name": "windsurf-auto-mcp",
   "displayName": "WindsurfAutoMcp",
   "description": "Windsurf MCP 自动化工具 - 任务完成确认、用户交互、一键配置",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "windsurf-auto-mcp",
   "repository": {
     "type": "git",

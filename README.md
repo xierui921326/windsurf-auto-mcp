@@ -4,6 +4,7 @@
   <strong>Windsurf MCP 自动化工具</strong><br>
   任务完成确认 · 用户交互 · 一键配置<br><br>
   🆓 <strong>完全免费 · 开源项目</strong><br>
+  <strong>开源地址：</strong> <a href="https://github.com/JiXiangKing80/windsurf-auto-mcp">https://github.com/JiXiangKing80/windsurf-auto-mcp</a><br>
   💎 <strong>通过 MCP 协议优化交互，让你的 Windsurf 积分发挥数倍价值</strong>
 </p>
 
@@ -33,7 +34,7 @@ WindsurfAutoMcp 通过 MCP 协议实现：
 - 💎 **节约积分** - 任务完成后自动暂停，避免空转消耗
 - 🔌 **HTTP 模式 MCP 服务器** - 稳定可靠的连接方式
 - ✅ **任务完成确认** - AI 完成任务后自动询问用户是否继续
-- 🖼️ **图片上传支持** - 在对话中上传图片给 AI
+- 🖼️ **图片上传支持** - 在对话中上传多张图片给 AI（粘贴/拖拽/文件选择）
 - ⚙️ **一键配置 Windsurf** - 自动写入 MCP 配置文件
 - 🎨 **可视化控制面板** - 侧边栏管理界面
 - ⌨️ **快捷键支持** - `Ctrl+M` 快速切换对话框
@@ -201,6 +202,9 @@ npm run package
 本项目采用 [MIT License](LICENSE) 开源协议，**完全免费**，可自由使用、修改和分发。
 
 ## 版本历史
+
+### v1.0.1
+- ✨ 支持在继续对话/输入窗口上传多张图片
 
 ### v1.0.0
 - 🎉 初始版本发布
