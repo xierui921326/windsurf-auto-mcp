@@ -13,7 +13,16 @@ const os = require("os");
 const { spawn } = require("child_process");
 
 // ==================== 常量 ====================
-const VERSION = '1.0.2';
+// 从 package.json 动态获取版本号
+let VERSION = '1.0.0'; // 默认版本
+try {
+    const packageJsonPath = path.join(__dirname, '../../package.json');
+    const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
+    VERSION = packageJson.version;
+} catch (error) {
+    log('WARN', 'Failed to read version from package.json, using default version', error.message);
+}
+
 const DEBUG_MODE = process.env.DEBUG_MCP === '1';
 
 // ==================== 日志 ====================

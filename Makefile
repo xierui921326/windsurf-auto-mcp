@@ -1,7 +1,7 @@
 # WindsurfAutoMcp Makefile
 # 提供常用的开发、构建和调试命令
 
-.PHONY: help install build clean dev test debug-mcp package lint format
+.PHONY: help install build clean dev test debug-mcp package lint format version-patch version-minor version-major version
 
 # 默认目标
 help:
@@ -20,6 +20,10 @@ help:
 	@echo "  format      - 代码格式化"
 	@echo "  config      - 配置 Windsurf MCP"
 	@echo "  clean-all   - 完全清理（包括 node_modules）"
+	@echo "  version-patch - 升级补丁版本号 (x.x.X)"
+	@echo "  version-minor - 升级次版本号 (x.X.x)"
+	@echo "  version-major - 升级主版本号 (X.x.x)"
+	@echo "  version       - 显示当前版本信息"
 
 # 安装依赖
 install:
@@ -109,3 +113,31 @@ start: install build
 release: clean install build test package
 	@echo "发布包已准备完成！"
 	@ls -la *.vsix
+
+# ==================== 版本管理 ====================
+# 升级补丁版本号 (x.x.X)
+version-patch:
+	@echo "升级补丁版本号..."
+	npm version patch
+	@echo "✅ 补丁版本号已更新"
+	@echo "当前版本: $$(node -p "require('./package.json').version")"
+
+# 升级次版本号 (x.X.x)
+version-minor:
+	@echo "升级次版本号..."
+	npm version minor
+	@echo "✅ 次版本号已更新"
+	@echo "当前版本: $$(node -p "require('./package.json').version")"
+
+# 升级主版本号 (X.x.x)
+version-major:
+	@echo "升级主版本号..."
+	npm version major
+	@echo "✅ 主版本号已更新"
+	@echo "当前版本: $$(node -p "require('./package.json').version")"
+
+# 显示当前版本
+version:
+	@echo "当前版本信息:"
+	@echo "package.json: $$(node -p "require('./package.json').version")"
+	@echo "MCP Server: $$(node -e "const path = require('path'); const fs = require('fs'); const packageJsonPath = path.join(__dirname, 'package.json'); const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8')); console.log(packageJson.version);")"
