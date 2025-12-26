@@ -49,6 +49,50 @@ let contextSummary = {
     lastUpdate: null
 };
 
+// ==================== VSCode 扩展通信 ====================
+// 存储待处理的请求
+const pendingRequests = new Map();
+
+// 调用 VSCode 扩展命令
+async function callVSCodeCommand(command, args) {
+    return new Promise((resolve, reject) => {
+        const requestId = args[0]; // 第一个参数是 requestId
+        
+        // 存储 promise 的 resolve/reject
+        pendingRequests.set(requestId, { resolve, reject });
+        
+        // 发送通知给 VSCode 扩展
+        const notification = {
+            jsonrpc: '2.0',
+            method: 'notifications/tools/call',
+            params: {
+                command: command,
+                arguments: args
+            }
+        };
+        
+        // 通过 stderr 发送通知（VSCode 扩展会监听）
+        process.stderr.write(JSON.stringify(notification) + '\n');
+        
+        // 设置超时
+        setTimeout(() => {
+            if (pendingRequests.has(requestId)) {
+                pendingRequests.delete(requestId);
+                reject(new Error('VSCode command timeout'));
+            }
+        }, 30000); // 30秒超时
+    });
+}
+
+// 处理来自 VSCode 扩展的响应
+function handleVSCodeResponse(requestId, result) {
+    if (pendingRequests.has(requestId)) {
+        const { resolve } = pendingRequests.get(requestId);
+        pendingRequests.delete(requestId);
+        resolve(result);
+    }
+}
+
 // ==================== 弹窗实现 ====================
 async function showLocalPopup(title, message, type = 'input', allowImage = false) {
     if (process.platform === 'win32') {
@@ -311,41 +355,91 @@ const TOOLS = [
 // ==================== 工具处理函数 ====================
 async function handleAskContinue(args) {
     const reason = args.reason || '任务已完成';
-    const result = await showLocalPopup(
-        '继续对话？', 
-        `AI想要结束对话的原因：\n${reason}\n\n是否继续？`, 
-        'confirm'
-    );
     
-    let responseText = `结果: should_continue=${result}`;
-    if (result) {
-        const instruction = await showLocalPopup(
-            '新指令',
-            '请输入新的指令（可选）：',
-            'input'
-        );
-        if (instruction) {
-            responseText += `\n用户指令: ${instruction}`;
+    // 使用 VSCode 扩展命令而不是本地弹窗
+    try {
+        const result = await callVSCodeCommand('mcpService.showContinueDialog', [
+            `continue_${Date.now()}`, // requestId
+            reason
+        ]);
+        
+        if (result && result.continue) {
+            let responseText = `结果: should_continue=true`;
+            if (result.newInstruction) {
+                responseText += `\n用户指令: ${result.newInstruction}`;
+            }
+            return { content: [{ type: 'text', text: responseText }] };
+        } else {
+            return { content: [{ type: 'text', text: '结果: should_continue=false' }] };
         }
+    } catch (error) {
+        log('ERROR', 'Failed to call VSCode command, falling back to local popup', error.message);
+        // 回退到本地弹窗
+        const result = await showLocalPopup(
+            '继续对话？', 
+            `AI想要结束对话的原因：\n${reason}\n\n是否继续？`, 
+            'confirm'
+        );
+        
+        let responseText = `结果: should_continue=${result}`;
+        if (result) {
+            const instruction = await showLocalPopup(
+                '新指令',
+                '请输入新的指令（可选）：',
+                'input'
+            );
+            if (instruction) {
+                responseText += `\n用户指令: ${instruction}`;
+            }
+        }
+        
+        return { content: [{ type: 'text', text: responseText }] };
     }
-    
-    return { content: [{ type: 'text', text: responseText }] };
 }
 
 async function handleAskUser(args) {
     const { title = '用户输入', message, type, allowImage = false } = args;
     
-    let result;
-    if (type === 'confirm') {
-        result = await showLocalPopup(title, message, 'confirm');
-        return { content: [{ type: 'text', text: result ? 'true' : 'false' }] };
-    } else if (type === 'input') {
-        result = await showLocalPopup(title, message, 'input');
-        return { content: [{ type: 'text', text: result || '' }] };
-    } else {
-        // info 类型，只显示消息
-        await showLocalPopup(title, message, 'confirm');
-        return { content: [{ type: 'text', text: 'acknowledged' }] };
+    // 使用 VSCode 扩展命令而不是本地弹窗
+    try {
+        if (type === 'confirm' || type === 'input' || !type) {
+            const result = await callVSCodeCommand('mcpService.showInputDialog', [
+                `input_${Date.now()}`, // requestId
+                title,
+                message,
+                allowImage
+            ]);
+            
+            if (type === 'confirm') {
+                return { content: [{ type: 'text', text: result ? 'true' : 'false' }] };
+            } else {
+                return { content: [{ type: 'text', text: result || '' }] };
+            }
+        } else {
+            // info 类型，只显示消息
+            await callVSCodeCommand('mcpService.showInputDialog', [
+                `info_${Date.now()}`,
+                title,
+                message,
+                false
+            ]);
+            return { content: [{ type: 'text', text: 'acknowledged' }] };
+        }
+    } catch (error) {
+        log('ERROR', 'Failed to call VSCode command, falling back to local popup', error.message);
+        // 回退到本地弹窗
+        let result;
+        if (type === 'confirm') {
+            result = await showLocalPopup(title, message, 'confirm');
+            return { content: [{ type: 'text', text: result ? 'true' : 'false' }] };
+        } else if (type === 'input') {
+            result = await showLocalPopup(title, message, 'input');
+            return { content: [{ type: 'text', text: result || '' }] };
+        } else {
+            // info 类型，只显示消息
+            await showLocalPopup(title, message, 'confirm');
+            return { content: [{ type: 'text', text: 'acknowledged' }] };
+        }
     }
 }
 

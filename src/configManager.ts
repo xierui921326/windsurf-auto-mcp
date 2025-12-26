@@ -174,6 +174,17 @@ export async function configureWindsurf() {
                     config.mcpServers = {};
                 }
 
+                // 检查是否已经存在 windsurf_auto_mcp 配置
+                const existingConfig = config.mcpServers['windsurf_auto_mcp'];
+                if (existingConfig && 
+                    existingConfig.command === 'node' && 
+                    existingConfig.args && 
+                    existingConfig.args[0] === mcpServerPath) {
+                    // 配置已存在且正确，跳过此文件
+                    outputChannel.appendLine(`配置文件 ${configPath} 中已存在正确的 windsurf_auto_mcp 配置，跳过更新`);
+                    continue;
+                }
+
                 // 添加或更新 windsurf_auto_mcp 配置（使用标准 MCP 协议）
                 config.mcpServers['windsurf_auto_mcp'] = {
                     command: 'node',

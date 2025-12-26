@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import { optimizationSettings, commandHistory, contextSummary, saveOptimizationData } from './mcpTools';
 import { createWindsurfRules } from './configManager';
+import { stats, isServerRunning, getCurrentPort } from './serverManager';
 
 export class SidebarProvider implements vscode.WebviewViewProvider {
     private _view?: vscode.WebviewView;
@@ -72,6 +73,15 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'showContextSummary':
                     this.showContextSummary();
+                    break;
+                case 'startServer':
+                    vscode.commands.executeCommand('mcpService.startServer');
+                    break;
+                case 'stopServer':
+                    vscode.commands.executeCommand('mcpService.stopServer');
+                    break;
+                case 'showStats':
+                    vscode.commands.executeCommand('mcpService.showStats');
                     break;
             }
         });
@@ -147,10 +157,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
 
     private _generateHtmlFromTemplate(isConfigured: boolean): string {
         try {
-            const extensionPath = path.dirname(path.dirname(__dirname));
-            const templatePath = path.join(extensionPath, 'assets', 'templates', 'sidebar.html');
-            const stylesPath = path.join(extensionPath, 'assets', 'styles', 'sidebar.css');
-            const scriptsPath = path.join(extensionPath, 'assets', 'scripts', 'sidebar.js');
+            // 修复路径计算 - 使用 extensionUri 来确保正确的路径
+            const templatePath = vscode.Uri.joinPath(this._extensionUri, 'assets', 'templates', 'sidebar.html').fsPath;
+            const stylesPath = vscode.Uri.joinPath(this._extensionUri, 'assets', 'styles', 'sidebar.css').fsPath;
+            const scriptsPath = vscode.Uri.joinPath(this._extensionUri, 'assets', 'scripts', 'sidebar.js').fsPath;
             
             let template = '';
             let styles = '';
@@ -171,18 +181,29 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             }
         } catch (error) {
             // 模板文件读取失败，使用回退内容
+            console.error('Failed to load template files:', error);
         }
         
         return this._getFallbackHtmlContent(isConfigured);
     }
 
     private _replaceTemplateVariables(template: string, styles: string, scripts: string, isConfigured: boolean): string {
+        const serverRunning = isServerRunning();
+        const currentPort = getCurrentPort();
+        
         const variables = {
             '{{STYLES}}': styles,
             '{{SCRIPTS}}': scripts,
             '{{CONFIG_BUTTON_CLASS}}': isConfigured ? 'btn-configured' : 'btn-primary',
             '{{CONFIG_BUTTON_TEXT}}': isConfigured ? '✓ 已写入配置' : '写入 Windsurf 配置',
             '{{CONFIG_STATUS_TEXT}}': isConfigured ? '配置已写入，请重启 Windsurf 生效' : '点击按钮将 MCP 服务信息写入 Windsurf 配置文件',
+            '{{SERVER_STATUS_CLASS}}': serverRunning ? 'online' : 'offline',
+            '{{SERVER_STATUS_TEXT}}': serverRunning ? '运行中' : '已停止',
+            '{{SERVER_PORT_DISPLAY}}': serverRunning ? `<div class="status-right">端口: ${currentPort}</div>` : '',
+            '{{SERVER_BUTTON_CLASS}}': serverRunning ? 'btn-danger' : 'btn-success',
+            '{{SERVER_BUTTON_TEXT}}': serverRunning ? '停止服务器' : '启动服务器',
+            '{{SERVER_BUTTON_ACTION}}': serverRunning ? 'stopServer()' : 'startServer()',
+            '{{CURRENT_PORT}}': currentPort.toString(),
             '{{OPTIMIZATION_STATUS_CLASS}}': optimizationSettings.enabled ? 'online' : 'offline',
             '{{OPTIMIZATION_STATUS_TEXT}}': optimizationSettings.enabled ? '已启用' : '已禁用',
             '{{OPTIMIZATION_LEVEL}}': optimizationSettings.optimizationLevel,
@@ -214,6 +235,9 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     }
 
     private _getFallbackHtmlContent(isConfigured: boolean): string {
+        const serverRunning = stats.totalCalls > 0 || (Date.now() - stats.startTime) > 5000;
+        const uptime = Math.floor((Date.now() - stats.startTime) / 1000);
+        
         return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -251,18 +275,50 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
             background: var(--vscode-testing-iconPassed);
             color: white;
         }
+        .btn-success {
+            background: var(--vscode-testing-iconPassed);
+            color: white;
+        }
+        .btn-danger {
+            background: var(--vscode-testing-iconFailed);
+            color: white;
+        }
         h3 { margin-top: 0; }
         .status { font-size: 12px; color: var(--vscode-descriptionForeground); margin-top: 8px; }
+        .status-online { color: var(--vscode-testing-iconPassed); }
+        .status-offline { color: var(--vscode-testing-iconFailed); }
+        .stats { display: flex; justify-content: space-between; margin: 8px 0; }
+        .stat-item { text-align: center; }
+        .stat-value { font-weight: bold; color: var(--vscode-textLink-foreground); }
     </style>
 </head>
 <body>
     <div class="card">
-        <h3>开源与免费</h3>
-        <p style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 12px;">
-            本插件完全免费。开源地址：https://github.com/JiXiangKing80/windsurf-auto-mcp
-        </p>
-        <button class="btn" onclick="openRepo()">打开 GitHub</button>
-        <button class="btn" onclick="copyRepoUrl()">复制链接</button>
+        <h3>MCP 服务器状态</h3>
+        <div class="status ${serverRunning ? 'status-online' : 'status-offline'}">
+            ${serverRunning ? '🟢 服务器运行中' : '🔴 服务器未启动'}
+        </div>
+        <div class="stats">
+            <div class="stat-item">
+                <div class="stat-value">${stats.totalCalls}</div>
+                <div style="font-size: 10px;">总调用</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${stats.askUserCalls}</div>
+                <div style="font-size: 10px;">用户交互</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${stats.askContinueCalls}</div>
+                <div style="font-size: 10px;">续杯次数</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">${uptime}s</div>
+                <div style="font-size: 10px;">运行时间</div>
+            </div>
+        </div>
+        <button class="btn ${serverRunning ? 'btn-danger' : 'btn-success'}" onclick="${serverRunning ? 'stopServer()' : 'startServer()'}">
+            ${serverRunning ? '停止服务器' : '启动服务器'}
+        </button>
     </div>
 
     <div class="card">
@@ -291,8 +347,25 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
         <button class="btn" onclick="createRules()">创建/更新规则文件</button>
     </div>
 
+    <div class="card">
+        <h3>开源与免费</h3>
+        <p style="font-size: 12px; color: var(--vscode-descriptionForeground); margin-bottom: 12px;">
+            本插件完全免费。开源地址：https://github.com/JiXiangKing80/windsurf-auto-mcp
+        </p>
+        <button class="btn" onclick="openRepo()">打开 GitHub</button>
+        <button class="btn" onclick="copyRepoUrl()">复制链接</button>
+    </div>
+
     <script>
         const vscode = acquireVsCodeApi();
+        
+        function startServer() {
+            vscode.postMessage({ type: 'startServer' });
+        }
+        
+        function stopServer() {
+            vscode.postMessage({ type: 'stopServer' });
+        }
         
         function configWindsurf() {
             vscode.postMessage({ type: 'configWindsurf' });

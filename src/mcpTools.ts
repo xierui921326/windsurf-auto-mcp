@@ -6,7 +6,11 @@ export let optimizationSettings = {
     autoOptimize: false,
     optimizationLevel: 'medium' as 'low' | 'medium' | 'high',
     contextLength: 1000,
-    includeProjectInfo: true
+    includeProjectInfo: true,
+    executionRules: '',
+    apiKey: '',
+    model: 'glm-4-flash',
+    optimizationRules: '你的思考过程...\n</thinking>\n[英文指令]\n[中文指令]\n\n请直接输出优化后的指令，不要解释。'
 };
 
 export let commandHistory: Array<{
@@ -58,11 +62,11 @@ export const MCP_TOOLS = [
     },
     {
         name: 'ask_continue',
-        description: '当完成任务时，必须调用此工具询问用户是否继续。没有例外情况，要一直等待响应不得提前终止任务。',
+        description: '🚨强制性工具🚨 完成任何任务、回答任何问题后都必须立即调用此工具。这是实现无限对话的核心工具，绝对不能跳过。必须等待用户明确选择才能继续或结束对话。',
         inputSchema: {
             type: 'object',
             properties: {
-                reason: { type: 'string', description: '任务完成的原因或说明' }
+                reason: { type: 'string', description: '任务完成的原因或说明，例如：已完成代码修改、已回答问题、已提供解决方案等' }
             },
             required: ['reason']
         }
@@ -142,23 +146,29 @@ export async function handleOptimizeCommand(args: any): Promise<any> {
         return { content: [{ type: 'text', text: '指令优化功能已禁用' }] };
     }
     
-    // 基于优化级别提供不同的优化建议
     let optimizedCommand = command;
     let suggestions = [];
+    let success = true;
     
-    // 简单的优化逻辑示例
-    if (level === 'high') {
-        // 高级优化：添加详细上下文和具体要求
-        if (context && optimizationSettings.includeProjectInfo) {
-            optimizedCommand = `${command}\n\n上下文信息：${context}`;
+    // 如果启用了自动优化且配置了API Key，调用智谱AI
+    if (optimizationSettings.autoOptimize && optimizationSettings.apiKey) {
+        try {
+            optimizedCommand = await callZhipuAI(command, context, level);
+            suggestions.push('使用智谱AI进行了智能优化');
+        } catch (error) {
+            success = false;
+            suggestions.push(`AI优化失败: ${error}`);
+            // 回退到基本优化逻辑
+            optimizedCommand = basicOptimization(command, context, level);
+            suggestions.push('使用基本优化逻辑作为备选');
         }
-        suggestions.push('添加了详细上下文信息');
-        suggestions.push('建议明确指定技术栈和约束条件');
-    } else if (level === 'medium') {
-        // 中级优化：基本结构化
-        if (!command.includes('请') && !command.includes('帮助')) {
-            optimizedCommand = `请${command}`;
-            suggestions.push('添加了礼貌用词');
+    } else {
+        // 使用基本优化逻辑
+        optimizedCommand = basicOptimization(command, context, level);
+        suggestions.push('使用基本优化逻辑');
+        
+        if (!optimizationSettings.apiKey) {
+            suggestions.push('提示：配置API Key可启用AI智能优化');
         }
     }
     
@@ -169,7 +179,7 @@ export async function handleOptimizeCommand(args: any): Promise<any> {
         timestamp: Date.now(),
         optimized: optimizedCommand,
         context: context || '',
-        success: true
+        success: success
     };
     commandHistory.unshift(historyEntry);
     
@@ -183,9 +193,76 @@ export async function handleOptimizeCommand(args: any): Promise<any> {
     return {
         content: [{
             type: 'text',
-            text: `指令优化完成：\n\n原始指令：${command}\n优化后：${optimizedCommand}\n\n优化建议：${suggestions.join('、')}`
+            text: `指令优化完成：\n\n原始指令：${command}\n优化后：${optimizedCommand}\n\n优化说明：${suggestions.join('、')}`
         }]
     };
+}
+
+// 基本优化逻辑
+function basicOptimization(command: string, context?: string, level: string = 'medium'): string {
+    let optimizedCommand = command;
+    
+    // 基于优化级别提供不同的优化建议
+    if (level === 'high') {
+        // 高级优化：添加详细上下文和具体要求
+        if (context && optimizationSettings.includeProjectInfo) {
+            optimizedCommand = `${command}\n\n上下文信息：${context}`;
+        }
+    } else if (level === 'medium') {
+        // 中级优化：基本结构化
+        if (!command.includes('请') && !command.includes('帮助')) {
+            optimizedCommand = `请${command}`;
+        }
+    }
+    
+    return optimizedCommand;
+}
+
+// 调用智谱AI进行指令优化
+async function callZhipuAI(command: string, context?: string, level: string = 'medium'): Promise<string> {
+    if (!optimizationSettings.apiKey) {
+        throw new Error('未配置API Key');
+    }
+    
+    // 构建优化提示词
+    let prompt = optimizationSettings.optimizationRules.replace('{instruction}', command);
+    
+    if (context && optimizationSettings.includeProjectInfo) {
+        prompt += `\n\n项目上下文：${context}`;
+    }
+    
+    // 调用智谱AI API
+    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${optimizationSettings.apiKey}`
+        },
+        body: JSON.stringify({
+            model: optimizationSettings.model,
+            messages: [
+                {
+                    role: 'user',
+                    content: prompt
+                }
+            ],
+            temperature: 0.7,
+            max_tokens: 1000
+        })
+    });
+    
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})) as any;
+        throw new Error(`API调用失败: ${response.status} ${errorData.error?.message || response.statusText}`);
+    }
+    
+    const data = await response.json() as any;
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error('API返回数据格式错误');
+    }
+    
+    return data.choices[0].message.content.trim();
 }
 
 export async function handleSaveCommandHistory(args: any): Promise<any> {

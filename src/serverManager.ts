@@ -275,17 +275,23 @@ export function handleWebviewResponse(requestId: string, value: any) {
         if (requestId.startsWith('continue_')) {
             // 处理继续对话的响应
             if (value && value.continue) {
+                let responseText = `结果: should_continue=true`;
+                if (value.newInstruction && value.newInstruction.trim()) {
+                    responseText += `\n\n用户新指令: ${value.newInstruction}\n\n请立即执行用户的新指令，完成后再次调用 ask_continue 工具询问是否继续。`;
+                } else {
+                    responseText += `\n\n用户选择继续对话，请等待用户的下一个指令，或主动询问用户需要什么帮助。完成后必须再次调用 ask_continue 工具。`;
+                }
                 pending.resolve({
                     content: [{
                         type: 'text',
-                        text: value.newInstruction || '用户选择继续'
+                        text: responseText
                     }]
                 });
             } else {
                 pending.resolve({
                     content: [{
                         type: 'text',
-                        text: '用户选择结束对话'
+                        text: '结果: should_continue=false\n\n用户选择结束对话。感谢使用！'
                     }]
                 });
             }
