@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WindsurfAutoMcp</title>
+    <style>{{STYLES}}</style>
+</head>
+<body>
+    <div class="app">
+        <!-- 开源与免费 -->
+        <div class="card">
+            <div class="section-title">开源与免费</div>
+            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px;">
+                本插件完全免费。开源地址：
+                <span style="color: var(--accent-hover); word-break: break-all;">https://github.com/JiXiangKing80/windsurf-auto-mcp</span>
+            </p>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="openRepo()">打开 GitHub</button>
+                <button class="btn btn-ghost" onclick="copyRepoUrl()">复制链接</button>
+            </div>
+        </div>
+
+        <!-- 服务器状态 -->
+        <div class="card">
+            <div class="section-title">服务器</div>
+            
+            <div class="status-bar">
+                <div class="status-left">
+                    <span class="status-dot {{SERVER_STATUS_CLASS}}"></span>
+                    <span class="status-label {{SERVER_STATUS_CLASS}}">{{SERVER_STATUS_TEXT}}</span>
+                </div>
+                {{SERVER_PORT_DISPLAY}}
+            </div>
+            
+            <div class="input-group">
+                <label class="input-label">端口</label>
+                <div class="input-row">
+                    <input type="number" class="input" id="portInput" value="{{CURRENT_PORT}}" min="1024" max="65535">
+                </div>
+            </div>
+            
+            <div class="btn-group">
+                <button class="btn {{SERVER_BUTTON_CLASS}}" onclick="{{SERVER_BUTTON_ACTION}}">
+                    {{SERVER_BUTTON_TEXT}}
+                </button>
+                <button class="btn btn-ghost" onclick="restartServer()">重启</button>
+            </div>
+        </div>
+
+        <!-- 对话控制 -->
+        <div class="card">
+            <div class="section-title">对话</div>
+            <button class="btn btn-primary btn-full" onclick="openContinueDialog()">
+                打开对话窗口
+            </button>
+            <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; text-align: center;">
+                快捷键: <kbd style="background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">Ctrl+M</kbd>
+            </p>
+        </div>
+
+        <!-- 提示语 -->
+        <div class="card">
+            <div class="section-title">提示语</div>
+            <div class="prompt-card">
+                <p class="prompt-text">
+                    当你完成一个任务时，必须调用 <code>WindsurfAutoMcp</code> 工具询问用户是否继续。
+                </p>
+            </div>
+            <button class="btn btn-ghost btn-full" onclick="copyPrompt()">
+                复制
+            </button>
+        </div>
+
+        <!-- 快捷操作 -->
+        <div class="card">
+            <div class="section-title">Windsurf 配置</div>
+            <div class="btn-group">
+                <button class="btn {{CONFIG_BUTTON_CLASS}}" onclick="configWindsurf()" id="initBtn">
+                    {{CONFIG_BUTTON_TEXT}}
+                </button>
+                <button class="btn btn-ghost" onclick="resetDefaults()">恢复默认端口</button>
+            </div>
+            <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+                {{CONFIG_STATUS_TEXT}}
+            </p>
+        </div>
+
+        <!-- 统计 -->
+        <div class="card">
+            <div class="section-title">统计</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{TOTAL_CALLS}}</div>
+                    <div class="stat-label">总调用</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{ASK_CONTINUE_CALLS}}</div>
+                    <div class="stat-label">ask_continue</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 指令优化设置 -->
+        <div class="card">
+            <div class="section-title">指令优化设置</div>
+            <div class="status-bar">
+                <div class="status-left">
+                    <span class="status-dot {{OPTIMIZATION_STATUS_CLASS}}"></span>
+                    <span class="status-label {{OPTIMIZATION_STATUS_CLASS}}">{{OPTIMIZATION_STATUS_TEXT}}</span>
+                </div>
+                <span class="status-port">{{OPTIMIZATION_LEVEL}}</span>
+            </div>
+            <div class="input-group">
+                <label class="input-label">优化级别</label>
+                <div class="input-row">
+                    <select class="input" id="optimizationLevel" onchange="updateOptimizationLevel()">
+                        {{OPTIMIZATION_LEVEL_OPTIONS}}
+                    </select>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn {{OPTIMIZATION_BUTTON_CLASS}}" onclick="toggleOptimization()">
+                    {{OPTIMIZATION_BUTTON_TEXT}}
+                </button>
+            </div>
+        </div>
+
+        <!-- 历史指令管理 -->
+        <div class="card">
+            <div class="section-title">历史指令</div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{HISTORY_TOTAL}}</div>
+                    <div class="stat-label">总记录</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">{{HISTORY_SUCCESS}}</div>
+                    <div class="stat-label">成功数</div>
+                </div>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="viewHistory()">查看历史</button>
+                <button class="btn btn-ghost" onclick="clearHistory()">清空历史</button>
+            </div>
+        </div>
+
+        <!-- 上下文摘要 -->
+        <div class="card">
+            <div class="section-title">项目上下文</div>
+            <div class="desc">
+                项目: {{PROJECT_NAME}}<br>
+                类型: {{PROJECT_TYPE}}<br>
+                技术: {{PROJECT_TECHNOLOGIES}}<br>
+                任务: {{CURRENT_TASK}}
+            </div>
+            <button class="btn btn-primary btn-full" onclick="showContextSummary()">查看详情</button>
+        </div>
+
+        <!-- 规则文件 -->
+        <div class="card">
+            <div class="section-title">规则文件</div>
+            <div class="desc">自动创建 .windsurf/rules.md 文件，包含增强功能的使用规则</div>
+            <button class="btn btn-primary btn-full" onclick="createRules()">创建/更新规则文件</button>
+        </div>
+    </div>
+
+    <script>{{SCRIPTS}}</script>
+</body>
+</html>
