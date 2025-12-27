@@ -56,17 +56,6 @@
         "mac": "cmd+m"
       }
     ],
-    "views": {
-      "explorer": [
-        {
-          "id": "infiniteAsk.chatView",
-          "name": "Infinite Ask",
-          "type": "webview",
-          "contextualTitle": "Infinite Ask 聊天界面",
-          "icon": "$(comment-discussion)"
-        }
-      ]
-    },
     "configuration": {
       "title": "WindsurfAutoMcp",
       "properties": {

@@ -24,8 +24,8 @@ interface PendingRequest {
     resolve: (value: any) => void;
 }
 
-export class ChatProvider implements vscode.WebviewViewProvider {
-    private _view?: vscode.WebviewView;
+export class ChatProvider {
+    private _panel?: vscode.WebviewPanel;
     private _extensionUri: vscode.Uri;
     private _messages: ChatMessage[] = [];
     private _pendingRequest?: PendingRequest;
@@ -47,21 +47,28 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         this._context = context;
     }
 
-    public resolveWebviewView(
-        webviewView: vscode.WebviewView,
-        context: vscode.WebviewViewResolveContext,
-        _token: vscode.CancellationToken,
-    ) {
-        this._view = webviewView;
+    public openChatPanel() {
+        if (this._panel) {
+            // 如果面板已存在，则显示它
+            this._panel.reveal(vscode.ViewColumn.Beside);
+            return;
+        }
 
-        webviewView.webview.options = {
-            enableScripts: true,
-            localResourceRoots: [this._extensionUri]
-        };
+        // 创建新的webview面板
+        this._panel = vscode.window.createWebviewPanel(
+            'infiniteAsk',
+            'Infinite Ask',
+            vscode.ViewColumn.Beside,
+            {
+                enableScripts: true,
+                localResourceRoots: [this._extensionUri],
+                retainContextWhenHidden: true
+            }
+        );
 
-        webviewView.webview.html = this._getHtmlContent();
+        this._panel.webview.html = this._getHtmlContent();
 
-        webviewView.webview.onDidReceiveMessage((message: any) => {
+        this._panel.webview.onDidReceiveMessage((message: any) => {
             switch (message.type) {
                 case 'sendMessage':
                     this.handleUserMessage(message.content, message.attachments);
@@ -76,6 +83,11 @@ export class ChatProvider implements vscode.WebviewViewProvider {
                     this.handleUserResponse(message.response);
                     break;
             }
+        });
+
+        // 当面板被关闭时清理引用
+        this._panel.onDidDispose(() => {
+            this._panel = undefined;
         });
     }
 
@@ -186,8 +198,8 @@ export class ChatProvider implements vscode.WebviewViewProvider {
 
 
     private updateView() {
-        if (this._view) {
-            this._view.webview.html = this._getHtmlContent();
+        if (this._panel) {
+            this._panel.webview.html = this._getHtmlContent();
         }
     }
 
@@ -208,11 +220,12 @@ export class ChatProvider implements vscode.WebviewViewProvider {
             font-family: var(--vscode-font-family);
             margin: 0;
             padding: 0;
-            background: var(--vscode-editor-background);
-            color: var(--vscode-editor-foreground);
+            background: var(--vscode-sideBar-background);
+            color: var(--vscode-foreground);
             display: flex;
             flex-direction: column;
             height: 100vh;
+            font-size: 13px;
         }
         
         .chat-container {
@@ -289,8 +302,9 @@ export class ChatProvider implements vscode.WebviewViewProvider {
         
         .input-container {
             border-top: 1px solid var(--vscode-panel-border);
-            padding: 16px;
-            background: var(--vscode-menu-background);
+            padding: 12px 16px;
+            background: var(--vscode-sideBar-background);
+            box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
         }
         
         .input-row {

@@ -23,11 +23,6 @@ export function activate(context: vscode.ExtensionContext) {
     // 初始化聊天提供者
     chatProvider = new ChatProvider(context.extensionUri);
     chatProvider.setContext(context);
-    
-    // 注册聊天视图提供者
-    context.subscriptions.push(
-        vscode.window.registerWebviewViewProvider('infiniteAsk.chatView', chatProvider)
-    );
 
     // 注册命令
     context.subscriptions.push(
@@ -79,8 +74,8 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('统计功能开发中...');
         }),
         vscode.commands.registerCommand('mcpService.toggleDialog', () => {
-            // 现在使用聊天界面，不需要打开面板
-            vscode.window.showInformationMessage('请在侧边栏的 Infinite Ask 视图中进行对话');
+            // 打开右侧拆分编辑器面板
+            chatProvider.openChatPanel();
         }),
         vscode.commands.registerCommand('mcpService.clearChatHistory', () => {
             if (chatProvider) {
@@ -92,8 +87,8 @@ export function activate(context: vscode.ExtensionContext) {
     // 自动创建规则文件（如果需要）
     autoCreateRulesIfNeeded();
 
-    // 聊天界面已在侧边栏中可用
-    outputChannel.appendLine('Infinite Ask 聊天界面已在侧边栏中可用');
+    // 聊天界面可通过 Ctrl+M 或命令面板打开
+    outputChannel.appendLine('Infinite Ask 聊天界面可通过 Ctrl+M 或命令面板打开');
 
     outputChannel.appendLine('WindsurfAutoMcp 扩展激活完成');
 }
