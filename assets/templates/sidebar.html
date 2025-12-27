@@ -167,6 +167,91 @@
         </div>
     </div>
 
-    <script>{{SCRIPTS}}</script>
+    <script>
+        const vscode = acquireVsCodeApi();
+        
+        function startServer() {
+            vscode.postMessage({ type: 'startServer' });
+        }
+        
+        function stopServer() {
+            vscode.postMessage({ type: 'stopServer' });
+        }
+        
+        function restartServer() {
+            vscode.postMessage({ type: 'restartServer' });
+        }
+        
+        function configWindsurf() {
+            vscode.postMessage({ type: 'configWindsurf' });
+        }
+        
+        function resetDefaults() {
+            vscode.postMessage({ type: 'resetDefaults' });
+        }
+        
+        function openContinueDialog() {
+            vscode.postMessage({ type: 'openContinueDialog' });
+        }
+        
+        function copyPrompt() {
+            vscode.postMessage({ type: 'copyPrompt' });
+        }
+        
+        function openRepo() {
+            vscode.postMessage({ type: 'openRepo' });
+        }
+        
+        function copyRepoUrl() {
+            vscode.postMessage({ type: 'copyRepoUrl' });
+        }
+        
+        function toggleOptimization() {
+            vscode.postMessage({ type: 'toggleOptimization' });
+        }
+        
+        function updateOptimizationLevel() {
+            const level = document.getElementById('optimizationLevel').value;
+            vscode.postMessage({ type: 'updateOptimizationLevel', level: level });
+        }
+        
+        function viewHistory() {
+            vscode.postMessage({ type: 'viewHistory' });
+        }
+        
+        function clearHistory() {
+            vscode.postMessage({ type: 'clearHistory' });
+        }
+        
+        function showContextSummary() {
+            vscode.postMessage({ type: 'showContextSummary' });
+        }
+        
+        function createRules() {
+            vscode.postMessage({ type: 'createRules' });
+        }
+        
+        // 端口输入框变化时更新配置
+        const portInput = document.getElementById('portInput');
+        if (portInput) {
+            portInput.addEventListener('change', function() {
+                const port = parseInt(this.value, 10);
+                if (port >= 1024 && port <= 65535) {
+                    vscode.postMessage({ type: 'updatePort', port: port });
+                }
+            });
+        }
+        
+        // 监听来自扩展的消息
+        window.addEventListener('message', event => {
+            const message = event.data;
+            switch (message.type) {
+                case 'showUserRequest':
+                    // 处理用户请求对话框
+                    console.log('User request received:', message);
+                    break;
+            }
+        });
+    </script>
 </body>
 </html>

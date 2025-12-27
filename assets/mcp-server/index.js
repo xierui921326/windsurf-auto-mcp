@@ -356,44 +356,63 @@ const TOOLS = [
 async function handleAskContinue(args) {
     const reason = args.reason || '任务已完成';
     
-    // 使用 VSCode 扩展命令而不是本地弹窗
+    log('INFO', 'Ask continue called with reason:', reason);
+    
+    // 直接调用 VSCode 扩展的 showContinueDialog 命令
     try {
+        const requestId = `continue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // 调用扩展命令显示继续对话框
         const result = await callVSCodeCommand('mcpService.showContinueDialog', [
-            `continue_${Date.now()}`, // requestId
+            requestId,
             reason
         ]);
         
+        log('INFO', 'Continue dialog result:', result);
+        
         if (result && result.continue) {
             let responseText = `结果: should_continue=true`;
-            if (result.newInstruction) {
-                responseText += `\n用户指令: ${result.newInstruction}`;
+            if (result.newInstruction && result.newInstruction.trim()) {
+                responseText += `\n\n用户新指令: ${result.newInstruction}\n\n请立即执行用户的新指令，完成后再次调用 ask_continue 工具询问是否继续。`;
+            } else {
+                responseText += `\n\n用户选择继续对话，请等待用户的下一个指令，或主动询问用户需要什么帮助。完成后必须再次调用 ask_continue 工具。`;
             }
             return { content: [{ type: 'text', text: responseText }] };
         } else {
-            return { content: [{ type: 'text', text: '结果: should_continue=false' }] };
+            return { content: [{ type: 'text', text: '结果: should_continue=false\n\n用户选择结束对话。感谢使用！' }] };
         }
     } catch (error) {
-        log('ERROR', 'Failed to call VSCode command, falling back to local popup', error.message);
-        // 回退到本地弹窗
-        const result = await showLocalPopup(
-            '继续对话？', 
-            `AI想要结束对话的原因：\n${reason}\n\n是否继续？`, 
-            'confirm'
-        );
+        log('ERROR', 'Failed to call VSCode command for ask_continue:', error.message);
         
-        let responseText = `结果: should_continue=${result}`;
-        if (result) {
-            const instruction = await showLocalPopup(
-                '新指令',
-                '请输入新的指令（可选）：',
-                'input'
+        // 回退到本地弹窗，但仍然尝试与Infinite Ask交互
+        try {
+            const result = await showLocalPopup(
+                '继续对话？', 
+                `AI想要结束对话的原因：\n${reason}\n\n是否继续？`, 
+                'confirm'
             );
-            if (instruction) {
-                responseText += `\n用户指令: ${instruction}`;
+            
+            let responseText = `结果: should_continue=${result}`;
+            if (result) {
+                const instruction = await showLocalPopup(
+                    '新指令',
+                    '请输入新的指令（可选）：',
+                    'input'
+                );
+                if (instruction && instruction.trim()) {
+                    responseText += `\n\n用户新指令: ${instruction}\n\n请立即执行用户的新指令，完成后再次调用 ask_continue 工具询问是否继续。`;
+                } else {
+                    responseText += `\n\n用户选择继续对话，请等待用户的下一个指令。`;
+                }
+            } else {
+                responseText += `\n\n用户选择结束对话。感谢使用！`;
             }
+            
+            return { content: [{ type: 'text', text: responseText }] };
+        } catch (fallbackError) {
+            log('ERROR', 'Fallback popup also failed:', fallbackError.message);
+            return { content: [{ type: 'text', text: '结果: should_continue=false\n\n无法显示继续对话框，对话结束。' }] };
         }
-        
-        return { content: [{ type: 'text', text: responseText }] };
     }
 }
 

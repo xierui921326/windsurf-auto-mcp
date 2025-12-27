@@ -78,6 +78,7 @@ export function stopServer() {
 }
 
 export function restartServer() {
+    outputChannel.appendLine('正在重启服务器...');
     stopServer();
     setTimeout(() => {
         startServer();
@@ -269,8 +270,21 @@ async function handleAskContinue(args: any): Promise<any> {
         const requestId = `continue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         pendingRequests.set(requestId, { resolve, reject: () => {} });
         
-        // 通过命令调用侧边栏显示继续对话框
+        // 通过命令调用Infinite Ask界面显示继续对话框
         vscode.commands.executeCommand('mcpService.showContinueDialog', requestId, reason);
+        
+        // 设置超时处理
+        setTimeout(() => {
+            if (pendingRequests.has(requestId)) {
+                pendingRequests.delete(requestId);
+                resolve({
+                    content: [{
+                        type: 'text',
+                        text: '结果: should_continue=false\n\n用户响应超时，对话结束。'
+                    }]
+                });
+            }
+        }, 300000); // 5分钟超时
     });
 }
 

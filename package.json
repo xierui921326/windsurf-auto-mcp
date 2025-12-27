@@ -27,6 +27,24 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mcpServicePanel",
+          "title": "WindsurfAutoMcp",
+          "icon": "$(server)"
+        }
+      ]
+    },
+    "views": {
+      "mcpServicePanel": [
+        {
+          "type": "webview",
+          "id": "mcpServicePanel.sidebarView",
+          "name": "控制面板"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "mcpService.startServer",
@@ -71,9 +89,32 @@
         },
         "mcpService.mode": {
           "type": "string",
-          "enum": ["http", "stdio"],
+          "enum": [
+            "http",
+            "stdio"
+          ],
           "default": "http",
           "description": "MCP服务器模式：http=HTTP模式，stdio=标准输入输出模式"
+        },
+        "mcpService.autoShowChat": {
+          "type": "boolean",
+          "default": false,
+          "description": "启动时自动显示聊天界面"
+        },
+        "mcpService.optimizationEnabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "启用指令优化功能"
+        },
+        "mcpService.optimizationLevel": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "medium",
+          "description": "指令优化级别"
         }
       }
     }
