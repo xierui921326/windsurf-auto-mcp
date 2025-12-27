@@ -4,7 +4,8 @@
   <strong>Windsurf MCP 自动化工具</strong><br>
   任务完成确认 · 用户交互 · 一键配置<br><br>
   🆓 <strong>完全免费 · 开源项目</strong><br>
-  <strong>开源地址：</strong> <a href="https://github.com/JiXiangKing80/windsurf-auto-mcp">https://github.com/JiXiangKing80/windsurf-auto-mcp</a><br>
+  <strong>原项目：</strong> <a href="https://github.com/JiXiangKing80/windsurf-auto-mcp">https://github.com/JiXiangKing80/windsurf-auto-mcp</a><br>
+  <strong>当前项目：</strong> <a href="https://github.com/xierui921326/windsurf-auto-mcp">https://github.com/xierui921326/windsurf-auto-mcp</a><br>
   💎 <strong>通过 MCP 协议优化交互，让你的 Windsurf 积分发挥数倍价值</strong>
 </p>
 
@@ -51,7 +52,7 @@ WindsurfAutoMcp 通过 MCP 协议实现：
 
 ### 方法一：从 Release 下载（推荐）
 
-1. 从 [Releases](https://github.com/JiXiangKing80/windsurf-auto-mcp/releases) 下载最新的 `.vsix` 文件
+1. 从 [Releases](https://github.com/xierui921326/windsurf-auto-mcp/releases) 下载最新的 `.vsix` 文件
 2. 打开 Windsurf/VS Code
 3. 按 `Ctrl+Shift+P` 打开命令面板
 4. 输入 `Extensions: Install from VSIX...`
@@ -180,7 +181,7 @@ WindsurfAutoMcp 通过 MCP 协议实现：
 
 ```bash
 # 克隆仓库
-git clone https://github.com/JiXiangKing80/windsurf-auto-mcp.git
+git clone https://github.com/xierui921326/windsurf-auto-mcp.git
 cd windsurf-auto-mcp
 
 # 安装依赖（需要 Node.js 16+）

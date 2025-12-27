@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import { initializeMcpTools } from './mcpTools';
 import { initializeConfigManager, autoCreateRulesIfNeeded, configureWindsurf, resetDefaults } from './configManager';
-import { SplitPanelProvider } from './splitPanelProvider';
+import { ChatProvider } from './chatProvider';
 import { initializeServerManager, startServer, stopServer } from './serverManager';
 
 let outputChannel: vscode.OutputChannel;
 let extensionContext: vscode.ExtensionContext;
+let chatProvider: ChatProvider;
 
 // ==================== 扩展激活 ====================
 
@@ -19,10 +20,14 @@ export function activate(context: vscode.ExtensionContext) {
     initializeConfigManager(outputChannel);
     initializeServerManager(context, outputChannel);
 
-    // 侧边栏已移除，所有功能整合到MCP交互面板中
-
-    // 初始化拆分面板提供者
-    const splitPanelProvider = SplitPanelProvider.getInstance(context.extensionUri);
+    // 初始化聊天提供者
+    chatProvider = new ChatProvider(context.extensionUri);
+    chatProvider.setContext(context);
+    
+    // 注册聊天视图提供者
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('infiniteAsk.chatView', chatProvider)
+    );
 
     // 注册命令
     context.subscriptions.push(
@@ -44,10 +49,10 @@ export function activate(context: vscode.ExtensionContext) {
             }
         }),
         vscode.commands.registerCommand('mcpService.openRepo', () => {
-            vscode.env.openExternal(vscode.Uri.parse('https://github.com/JiXiangKing80/windsurf-auto-mcp'));
+            vscode.env.openExternal(vscode.Uri.parse('https://github.com/xierui921326/windsurf-auto-mcp'));
         }),
         vscode.commands.registerCommand('mcpService.copyRepoUrl', () => {
-            vscode.env.clipboard.writeText('https://github.com/JiXiangKing80/windsurf-auto-mcp');
+            vscode.env.clipboard.writeText('https://github.com/xierui921326/windsurf-auto-mcp');
             vscode.window.showInformationMessage('GitHub 链接已复制到剪贴板');
         }),
         vscode.commands.registerCommand('mcpService.copyPrompt', () => {
@@ -56,13 +61,10 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('提示语已复制到剪贴板');
         }),
         vscode.commands.registerCommand('mcpService.showInputDialog', (requestId: string, title: string, message: string, allowImage: boolean = false) => {
-            splitPanelProvider.showInputDialog(requestId, title, message, allowImage);
+            chatProvider.showUserRequest(requestId, title, message, 'input', allowImage);
         }),
         vscode.commands.registerCommand('mcpService.showContinueDialog', (requestId: string, reason: string) => {
-            splitPanelProvider.showContinueDialog(requestId, reason);
-        }),
-        vscode.commands.registerCommand('mcpService.showSplitPanel', () => {
-            splitPanelProvider.createOrShowPanel();
+            chatProvider.showUserRequest(requestId, '继续对话', reason, 'continue', false);
         }),
         vscode.commands.registerCommand('mcpService.startServer', () => {
             const config = vscode.workspace.getConfiguration('mcpService');
@@ -77,18 +79,21 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('统计功能开发中...');
         }),
         vscode.commands.registerCommand('mcpService.toggleDialog', () => {
-            splitPanelProvider.createOrShowPanel();
+            // 现在使用聊天界面，不需要打开面板
+            vscode.window.showInformationMessage('请在侧边栏的 Infinite Ask 视图中进行对话');
+        }),
+        vscode.commands.registerCommand('mcpService.clearChatHistory', () => {
+            if (chatProvider) {
+                chatProvider.clearChatHistory();
+            }
         })
     );
 
     // 自动创建规则文件（如果需要）
     autoCreateRulesIfNeeded();
 
-    // 默认打开拆分面板
-    setTimeout(() => {
-        splitPanelProvider.createOrShowPanel();
-        outputChannel.appendLine('Infinite Ask 拆分面板已自动打开');
-    }, 1000);
+    // 聊天界面已在侧边栏中可用
+    outputChannel.appendLine('Infinite Ask 聊天界面已在侧边栏中可用');
 
     outputChannel.appendLine('WindsurfAutoMcp 扩展激活完成');
 }

@@ -1,6 +1,13 @@
 import * as vscode from 'vscode';
 import * as http from 'http';
-import { MCP_TOOLS, handleOptimizeCommand, handleSaveCommandHistory, handleGetCommandHistory, handleUpdateContextSummary, handleGetContextSummary } from './mcpTools';
+import { 
+    MCP_TOOLS,
+    handleOptimizeCommand, 
+    handleSaveCommandHistory, 
+    handleGetCommandHistory, 
+    handleUpdateContextSummary, 
+    handleGetContextSummary 
+} from './mcpTools';
 
 let mcpServer: http.Server | null = null;
 let currentPort = 3456;
@@ -228,7 +235,7 @@ async function handleAskUser(args: any): Promise<any> {
         const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         pendingRequests.set(requestId, { resolve, reject: () => {} });
         
-        // 通过命令调用侧边栏显示对话框
+        // 通过命令调用聊天界面显示对话框
         vscode.commands.executeCommand('mcpService.showInputDialog', requestId, title, message, allowImage);
     });
 }
@@ -317,5 +324,49 @@ function loadStats(context: vscode.ExtensionContext) {
     const savedStats = context.globalState.get<typeof stats>('mcpStats');
     if (savedStats) {
         stats = { ...stats, ...savedStats };
+    }
+}
+
+// 处理来自聊天界面的用户响应
+export function handleChatResponse(requestId: string, userResponse: string, type: 'input' | 'confirm' | 'continue') {
+    let result: any;
+    
+    switch (type) {
+        case 'input':
+            result = {
+                content: [{
+                    type: 'text',
+                    text: userResponse
+                }]
+            };
+            break;
+        case 'confirm':
+            const confirmed = userResponse.toLowerCase().includes('是') || 
+                            userResponse.toLowerCase().includes('yes') || 
+                            userResponse.toLowerCase().includes('确认');
+            result = {
+                content: [{
+                    type: 'text',
+                    text: confirmed ? 'confirmed' : 'cancelled'
+                }]
+            };
+            break;
+        case 'continue':
+            const shouldContinue = userResponse.toLowerCase().includes('继续') || 
+                                  userResponse.toLowerCase().includes('是') ||
+                                  userResponse.toLowerCase().includes('yes');
+            result = {
+                content: [{
+                    type: 'text',
+                    text: JSON.stringify({ should_continue: shouldContinue })
+                }]
+            };
+            break;
+    }
+    
+    const pending = pendingRequests.get(requestId);
+    if (pending) {
+        pendingRequests.delete(requestId);
+        pending.resolve(result);
     }
 }

@@ -6,7 +6,7 @@
   "publisher": "windsurf-auto-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/JiXiangKing80/windsurf-auto-mcp"
+    "url": "https://github.com/xierui921326/windsurf-auto-mcp"
   },
   "license": "MIT",
   "engines": {
@@ -56,6 +56,17 @@
         "mac": "cmd+m"
       }
     ],
+    "views": {
+      "explorer": [
+        {
+          "id": "infiniteAsk.chatView",
+          "name": "Infinite Ask",
+          "type": "webview",
+          "contextualTitle": "Infinite Ask 聊天界面",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
     "configuration": {
       "title": "WindsurfAutoMcp",
       "properties": {

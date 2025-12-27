@@ -13,7 +13,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/JiXiangKing80/windsurf-auto-mcp.git
+git clone https://github.com/xierui921326/windsurf-auto-mcp.git
 cd windsurf-auto-mcp
 
 # 安装依赖
