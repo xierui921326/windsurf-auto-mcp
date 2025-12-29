@@ -1,11 +1,19 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WindsurfAutoMcp</title>
-    <style>{{STYLES}}</style>
+    <style>
+        {
+                {
+                STYLES
+            }
+        }
+    </style>
 </head>
+
 <body>
     <div class="app">
         <!-- 开源与免费 -->
@@ -13,9 +21,11 @@
             <div class="section-title">开源与免费</div>
             <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px;">
                 本插件完全免费。原项目：
-                <span style="color: var(--accent-hover); word-break: break-all;">https://github.com/JiXiangKing80/windsurf-auto-mcp</span><br>
+                <span
+                    style="color: var(--accent-hover); word-break: break-all;">https://github.com/JiXiangKing80/windsurf-auto-mcp</span><br>
                 当前项目：
-                <span style="color: var(--accent-hover); word-break: break-all;">https://github.com/xierui921326/windsurf-auto-mcp</span>
+                <span
+                    style="color: var(--accent-hover); word-break: break-all;">https://github.com/xierui921326/windsurf-auto-mcp</span>
             </p>
             <div class="btn-group">
                 <button class="btn btn-primary" onclick="openRepo()">打开 GitHub</button>
@@ -26,7 +36,7 @@
         <!-- 服务器状态 -->
         <div class="card">
             <div class="section-title">服务器</div>
-            
+
             <div class="status-bar">
                 <div class="status-left">
                     <span class="status-dot {{SERVER_STATUS_CLASS}}"></span>
@@ -34,14 +44,14 @@
                 </div>
                 {{SERVER_PORT_DISPLAY}}
             </div>
-            
+
             <div class="input-group">
                 <label class="input-label">端口</label>
                 <div class="input-row">
                     <input type="number" class="input" id="portInput" value="{{CURRENT_PORT}}" min="1024" max="65535">
                 </div>
             </div>
-            
+
             <div class="btn-group">
                 <button class="btn {{SERVER_BUTTON_CLASS}}" onclick="{{SERVER_BUTTON_ACTION}}">
                     {{SERVER_BUTTON_TEXT}}
@@ -57,7 +67,8 @@
                 打开对话窗口
             </button>
             <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; text-align: center;">
-                快捷键: <kbd style="background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">Ctrl+M</kbd>
+                快捷键: <kbd
+                    style="background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">Ctrl+M</kbd>
             </p>
         </div>
 
@@ -162,86 +173,86 @@
         <!-- 规则文件 -->
         <div class="card">
             <div class="section-title">规则文件</div>
-            <div class="desc">自动创建 .windsurf/rules.md 文件，包含增强功能的使用规则</div>
+            <div class="desc">自动创建 .windsurf/rules/rules.md 文件，包含增强功能的使用规则</div>
             <button class="btn btn-primary btn-full" onclick="createRules()">创建/更新规则文件</button>
         </div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
-        
+
         function startServer() {
             vscode.postMessage({ type: 'startServer' });
         }
-        
+
         function stopServer() {
             vscode.postMessage({ type: 'stopServer' });
         }
-        
+
         function restartServer() {
             vscode.postMessage({ type: 'restartServer' });
         }
-        
+
         function configWindsurf() {
             vscode.postMessage({ type: 'configWindsurf' });
         }
-        
+
         function resetDefaults() {
             vscode.postMessage({ type: 'resetDefaults' });
         }
-        
+
         function openContinueDialog() {
             vscode.postMessage({ type: 'openContinueDialog' });
         }
-        
+
         function copyPrompt() {
             vscode.postMessage({ type: 'copyPrompt' });
         }
-        
+
         function openRepo() {
             vscode.postMessage({ type: 'openRepo' });
         }
-        
+
         function copyRepoUrl() {
             vscode.postMessage({ type: 'copyRepoUrl' });
         }
-        
+
         function toggleOptimization() {
             vscode.postMessage({ type: 'toggleOptimization' });
         }
-        
+
         function updateOptimizationLevel() {
             const level = document.getElementById('optimizationLevel').value;
             vscode.postMessage({ type: 'updateOptimizationLevel', level: level });
         }
-        
+
         function viewHistory() {
             vscode.postMessage({ type: 'viewHistory' });
         }
-        
+
         function clearHistory() {
             vscode.postMessage({ type: 'clearHistory' });
         }
-        
+
         function showContextSummary() {
             vscode.postMessage({ type: 'showContextSummary' });
         }
-        
+
         function createRules() {
             vscode.postMessage({ type: 'createRules' });
         }
-        
+
         // 端口输入框变化时更新配置
         const portInput = document.getElementById('portInput');
         if (portInput) {
-            portInput.addEventListener('change', function() {
+            portInput.addEventListener('change', function () {
                 const port = parseInt(this.value, 10);
                 if (port >= 1024 && port <= 65535) {
                     vscode.postMessage({ type: 'updatePort', port: port });
                 }
             });
         }
-        
+
         // 监听来自扩展的消息
         window.addEventListener('message', event => {
             const message = event.data;
@@ -254,4 +265,5 @@
         });
     </script>
 </body>
+
 </html>

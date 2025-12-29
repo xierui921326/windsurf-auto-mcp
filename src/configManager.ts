@@ -139,10 +139,10 @@ export async function configureWindsurf() {
 
         // 支持多个配置路径，兼容不同版本的编辑器
         const configPaths = [
-            path.join(homeDir, '.windsurf', 'mcp_config.json'), // 可能的新路径
             path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json'),
             path.join(homeDir, '.codeium', 'windsurf-next', 'mcp_config.json'),
             path.join(homeDir, '.codeium', 'mcp_config.json'),
+            path.join(homeDir, '.windsurf', 'mcp_config.json'), // 可能的新路径
         ];
 
         let configFound = false;
