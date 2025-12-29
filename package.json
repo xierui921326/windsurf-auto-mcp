@@ -105,16 +105,6 @@
           "type": "boolean",
           "default": false,
           "description": "启用指令优化功能"
-        },
-        "mcpService.optimizationLevel": {
-          "type": "string",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ],
-          "default": "medium",
-          "description": "指令优化级别"
         }
       }
     }

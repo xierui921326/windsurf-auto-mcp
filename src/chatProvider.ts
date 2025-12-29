@@ -58,8 +58,11 @@ export class ChatProvider {
         optimizationRules: '',
         autoAddRules: true,
         autoSummary: true,
-        autoOptimize: false
+        autoOptimize: true
     };
+    private _showOptimizationResult: boolean = false;
+    private _isSettingsExpanded: boolean = false;
+    private _currentDraft: string = ''; // 保存当前输入框草稿
     private _commandHistory: string[] = [];
     private _contextSummary: string = '';
     private _context?: vscode.ExtensionContext;
@@ -136,6 +139,12 @@ export class ChatProvider {
                     break;
                 case 'updateModel':
                     this.updateOptimizationSettings({ model: message.value });
+                    break;
+                case 'updateDraft':
+                    this._currentDraft = message.content;
+                    break;
+                case 'showErrorMessage':
+                    vscode.window.showErrorMessage(message.message);
                     break;
                 case 'updateOptimizationRules':
                     this.updateOptimizationSettings({ optimizationRules: message.value });
@@ -312,7 +321,6 @@ export class ChatProvider {
     }
 
     private _getHtmlContent(): string {
-        // 处理中时不禁用输入框，让用户可以随时输入新指令
         const inputDisabled = '';
         // 根据状态显示不同的按钮文本
         let processingText = '启动无限对话';
@@ -323,7 +331,7 @@ export class ChatProvider {
                 processingText = '处理中...';
             }
         }
-        const optimizationExpanded = this._optimizationSettings.autoOptimize;
+        const optimizationExpanded = this._isSettingsExpanded;
 
         return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -349,24 +357,26 @@ export class ChatProvider {
             gap: 16px;
         }
         
-        .ai-status {
-            background: var(--vscode-textBlockQuote-background);
-            border-left: 4px solid var(--vscode-textBlockQuote-border);
-            padding: 12px 16px;
-            border-radius: 4px;
-        }
-        
-        .ai-status h3 {
-            margin: 0 0 8px 0;
-            font-size: 14px;
+        .ai-status-title {
+            font-size: 12px;
             font-weight: 600;
             color: var(--vscode-foreground);
+            margin-bottom: 4px;
+            padding-left: 2px;
+        }
+        
+        .ai-status {
+            background: var(--vscode-textBlockQuote-background);
+            border-left: 3px solid var(--vscode-focusBorder);
+            padding: 12px 16px;
+            border-radius: 0 4px 4px 0;
         }
         
         .ai-status p {
             margin: 0;
-            color: var(--vscode-descriptionForeground);
-            font-size: 12px;
+            color: var(--vscode-foreground);
+            font-size: 13px;
+            line-height: 1.5;
         }
         
         .optimization-settings {
@@ -645,6 +655,10 @@ export class ChatProvider {
             font-family: inherit;
             font-size: 13px;
         }
+
+        .hidden {
+            display: none !important;
+        }
         
         .form-group textarea {
             min-height: 80px;
@@ -710,6 +724,24 @@ export class ChatProvider {
             color: var(--vscode-descriptionForeground);
         }
         
+        .separator {
+            height: 1px;
+            background-color: var(--vscode-panel-border);
+            margin: 4px 0 12px 0;
+        }
+
+        .optimization-result-bar {
+            background-color: var(--vscode-titleBar-inactiveBackground);
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: flex;
+            gap: 16px;
+            align-items: center;
+            font-size: 12px;
+            margin-bottom: 8px;
+            border: 1px solid var(--vscode-panel-border);
+        }
+
         .message-content {
             font-size: 12px;
             line-height: 1.4;
@@ -719,11 +751,12 @@ export class ChatProvider {
 </head>
 <body>
     <div class="container">
-        <!-- 无限对话状态 -->
+        <!-- AI暂停原因 -->
+        <div class="ai-status-title">AI 暂停原因</div>
         <div class="ai-status">
-            <h3>无限对话模式</h3>
-            <p>${this._processingState.isProcessing ? this._processingState.currentTask : '等待在原生Windsurf编辑器中输入指令...'}</p>
+            <p>${this._processingState.isProcessing ? this._processingState.currentTask : 'AI 正在处理你的请求...'}</p>
         </div>
+
         
         <!-- 指令优化设置 -->
         <div class="optimization-settings" onclick="toggleOptimizationSettings()">
@@ -766,9 +799,11 @@ export class ChatProvider {
             </div>
         </div>` : ''}
         
+        <div class="separator"></div>
+        
         <!-- 输入指令 -->
         <div class="command-input">
-            <textarea id="inputText" placeholder="输入指令（可选，将复制到剪贴板方便在原生编辑器中使用）..." ${inputDisabled}></textarea>
+            <textarea id="inputText" placeholder="输入指令（可选，将复制到剪贴板方便在原生编辑器中使用）..." oninput="updateDraft()" ${inputDisabled}>${this.escapeHtml(this._currentDraft)}</textarea>
         </div>
         
         <!-- 功能按钮 -->
@@ -783,21 +818,15 @@ export class ChatProvider {
             </div>
         </div>
         
-        <!-- 处理状态显示 -->
-        ${this._processingState.isProcessing ? `
-        <div class="processing-status">
-            <div class="processing-indicator"></div>
-            <span>${this._processingState.currentTask}</span>
-        </div>` : ''}
-        
-        <!-- 选项 -->
-        <div class="options-row">
+        <!-- 优化结果栏 (选项) -->
+        <div class="optimization-result-bar ${this._showOptimizationResult ? '' : 'hidden'}">
             <label class="checkbox-option">
-                <input type="checkbox" id="addRules" checked>
+                <input type="checkbox" id="addRules" ${this._optimizationSettings.autoAddRules ? 'checked' : ''} onchange="updateAutoAddRulesFromMain()">
                 <span>追加规则</span>
             </label>
+            <span>|</span>
             <label class="checkbox-option">
-                <input type="checkbox" id="autoSummary" checked>
+                <input type="checkbox" id="autoSummaryMain" ${this._optimizationSettings.autoSummary ? 'checked' : ''} onchange="updateAutoSummaryFromMain()">
                 <span>自动摘要</span>
             </label>
         </div>
@@ -821,7 +850,7 @@ export class ChatProvider {
         </div>
 
         <!-- 上下文摘要 -->
-        <div class="section">
+        <div class="section ${this._showOptimizationResult ? '' : 'hidden'}">
             <div class="section-header">
                 <span>上下文摘要</span>
                 <span class="clear-btn" onclick="clearContext()">×</span>
@@ -877,7 +906,7 @@ export class ChatProvider {
                     type: 'startTask',
                     content: content,
                     addRules: document.getElementById('addRules').checked,
-                    autoSummary: document.getElementById('autoSummary').checked
+                    autoSummary: document.getElementById('autoSummaryMain').checked
                 });
             } else {
                 vscode.postMessage({
@@ -892,13 +921,20 @@ export class ChatProvider {
         function optimizeCommand() {
             const input = document.getElementById('inputText');
             const content = input.value.trim();
+            const addRulesEl = document.getElementById('addRules');
+            const autoSummaryEl = document.getElementById('autoSummaryMain');
             
             if (content) {
                 vscode.postMessage({
                     type: 'optimizeCommand',
                     content: content,
-                    addRules: document.getElementById('addRules').checked,
-                    autoSummary: document.getElementById('autoSummary').checked
+                    addRules: addRulesEl ? addRulesEl.checked : false,
+                    autoSummary: autoSummaryEl ? autoSummaryEl.checked : false
+                });
+            } else {
+                vscode.postMessage({
+                    type: 'showErrorMessage',
+                    message: '请输入需要优化的指令'
                 });
             }
         }
@@ -928,6 +964,18 @@ export class ChatProvider {
             });
         }
         
+        let draftTimeout;
+        function updateDraft() {
+            const value = document.getElementById('inputText').value;
+            if (draftTimeout) clearTimeout(draftTimeout);
+            draftTimeout = setTimeout(() => {
+                vscode.postMessage({
+                    type: 'updateDraft',
+                    content: value
+                });
+            }, 300);
+        }
+
         function updateApiKey() {
             const value = document.getElementById('apiKey').value;
             vscode.postMessage({
@@ -983,6 +1031,24 @@ export class ChatProvider {
                 value: value
             });
         }
+        
+        // 从主界面复选框更新设置
+        function updateAutoAddRulesFromMain() {
+            const value = document.getElementById('addRules').checked;
+            vscode.postMessage({
+                type: 'updateAutoAddRules',
+                value: value
+            });
+        }
+        
+        function updateAutoSummaryFromMain() {
+            const value = document.getElementById('autoSummaryMain').checked;
+            vscode.postMessage({
+                type: 'updateAutoSummary',
+                value: value
+            });
+        }
+
         
         // 自动调整文本框高度
         const commandInput = document.getElementById('inputText');
@@ -1181,8 +1247,7 @@ export class ChatProvider {
 
     // 新界面功能处理方法
     private handleToggleOptimizationSettings() {
-        this._optimizationSettings.autoOptimize = !this._optimizationSettings.autoOptimize;
-        this.saveOptimizationSettings();
+        this._isSettingsExpanded = !this._isSettingsExpanded;
         this.updateView();
     }
 
@@ -1267,6 +1332,7 @@ export class ChatProvider {
             // 重置处理状态
             this._processingState.isProcessing = false;
             this._processingState.currentTask = '';
+            this._currentDraft = ''; // 清空输入框
             this.updateView();
             return;
         }
@@ -1310,6 +1376,7 @@ export class ChatProvider {
             // 结束启动状态
             this._processingState.isProcessing = false;
             this._processingState.currentTask = '等待原生编辑器中的AI处理';
+            this._currentDraft = ''; // 清空输入框
             this.updateView();
 
         } catch (error) {
@@ -1512,8 +1579,19 @@ export class ChatProvider {
     }
 
     private async handleOptimizeCommand(content: string, addRules: boolean, autoSummary: boolean) {
+        // 保存最新的草稿内容
+        this._currentDraft = content;
+
         if (!content.trim()) {
-            vscode.window.showWarningMessage('请输入指令内容');
+            vscode.window.showErrorMessage('请输入指令内容'); // Changed to showErrorMessage
+            return;
+        }
+
+        // 检查 API Key
+        if (!this._optimizationSettings.apiKey) {
+            vscode.window.showErrorMessage('请先在"指令优化设置"中配置 API Key (智谱 AI)，才能执行优化指令。');
+            this._isSettingsExpanded = true;
+            this.updateView();
             return;
         }
 
@@ -1521,26 +1599,32 @@ export class ChatProvider {
         this._processingState.currentTask = '优化指令';
         this.updateView();
 
-        try {
-            // 调用MCP优化工具
-            const context = addRules ? '追加规则已启用' : '';
-            // 这里应该调用实际的MCP优化功能
-            vscode.window.showInformationMessage(`正在优化指令: ${content}`);
+        // 显示进度条
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: "正在优化指令...",
+            cancellable: false
+        }, async (progress) => {
+            try {
+                // 调用MCP优化工具 (这里应该替换为实际的 API 调用)
+                const context = addRules ? '追加规则已启用' : '';
+                vscode.window.showInformationMessage(`正在优化指令: ${content}`);
 
-            // 模拟处理时间
-            setTimeout(() => {
+                // 模拟 API 调用延迟
+                await new Promise(resolve => setTimeout(resolve, 2000));
+
                 this._processingState.isProcessing = false;
                 this._processingState.currentTask = '';
+                this._showOptimizationResult = true; // 显示优化结果区域
                 this.updateView();
-                vscode.window.showInformationMessage('指令优化完成');
-            }, 2000);
 
-        } catch (error) {
-            this._processingState.isProcessing = false;
-            this._processingState.currentTask = '';
-            this.updateView();
-            vscode.window.showErrorMessage(`优化失败: ${error}`);
-        }
+                vscode.window.showInformationMessage('指令优化完成');
+            } catch (error) {
+                this._processingState.isProcessing = false;
+                this.updateView();
+                vscode.window.showErrorMessage(`优化失败: ${error}`);
+            }
+        });
     }
 
     private handleEndSession() {
