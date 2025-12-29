@@ -1,46 +1,76 @@
-# Windsurf Rules - WindsurfAutoMcp Enhanced
+<!-- WINDSURF_AUTO_MCP_V1 -->
+# WINDSURF AUTO MCP - 对话流程控制规则
 
-## 🚨 强制性全局规则 🚨
-**无论何时，当你完成任何任务、回答任何问题、或执行任何操作后，都必须立即调用 `ask_continue` 工具询问用户是否继续。这是强制性的，没有任何例外情况。**
+## 核心规则
 
-### 强制调用 ask_continue 的情况：
-- ✅ 完成代码修改后 → 立即调用 ask_continue
-- ✅ 完成文件创建后 → 立即调用 ask_continue  
-- ✅ 完成调试分析后 → 立即调用 ask_continue
-- ✅ 完成项目配置后 → 立即调用 ask_continue
-- ✅ 回答用户问题后 → 立即调用 ask_continue
-- ✅ 提供建议或解决方案后 → 立即调用 ask_continue
-- ✅ 执行任何工具操作后 → 立即调用 ask_continue
-- ✅ **任何情况下都不能自动结束对话**
+**每次回复结束前，必须调用 `windsurf_auto_mcp` MCP 工具。**
 
-## 无限对话实现规则
-1. **永远不要说"任务完成"然后结束对话**
-2. **每次响应后都必须调用 ask_continue**
-3. **等待用户明确选择"结束对话"才能停止**
-4. **如果用户选择继续，立即准备接受新的指令**
-5. **保持对话的连续性和可用性**
+这是系统要求，不是可选的。
 
-## 指令优化规则
-- 在执行复杂任务前，可以使用 `optimize_command` 工具优化指令
-- 使用 `update_context_summary` 更新项目上下文信息
-- 使用 `save_command_history` 保存重要的指令执行记录
+---
 
-## 任务执行流程
-1. 接收用户指令
-2. 如果需要，使用 `optimize_command` 优化指令
-3. 更新上下文摘要（如果相关）
-4. 执行任务
-5. 保存执行历史
-6. **🚨 强制调用 `ask_continue` 询问用户是否继续 🚨**
-7. 根据用户响应决定下一步行动
+## 何时调用
 
-## 上下文管理
-- 在开始新项目时，使用 `update_context_summary` 设置项目信息
-- 在切换任务时，更新 currentTask 字段
-- 定期使用 `get_context_summary` 获取项目状态
+| 情况 | 操作 |
+|------|------|
+| 任务完成 | 调用 windsurf_auto_mcp |
+| 任务失败 | 调用 windsurf_auto_mcp |
+| 需要确认 | 调用 windsurf_auto_mcp |
+| 遇到错误 | 调用 windsurf_auto_mcp |
+| 不确定下一步 | 调用 windsurf_auto_mcp |
+| 任何其他情况 | 调用 windsurf_auto_mcp |
 
-## 重要提醒
-- **绝对不能自动终止对话**
-- **必须等待用户通过 ask_continue 对话框明确选择**
-- **提供清晰的任务完成原因**
-- **充分利用指令优化和历史管理功能提高效率**
+## 调用格式
+
+```json
+{
+  "reason": "简短说明暂停原因",
+  "workspace": "当前工作区的完整路径（必填）"
+}
+```
+
+### 示例
+
+```json
+{ "reason": "任务完成，等待下一步指令", "workspace": "/Users/xxx/project" }
+```
+
+**重要**：`workspace` 参数是**必填**的，必须传递当前工作区的完整路径，否则多窗口功能无法正常工作。
+
+## 禁止行为
+
+调用 windsurf_auto_mcp 之前，不要：
+
+- 说"如果有其他问题请告诉我"
+- 说"祝编程愉快"
+- 说"再见"或类似结束语
+- 假设对话已结束
+
+## 响应结构
+
+```
+[完成任务或回答问题]
+
+[简要总结]
+
+[调用 windsurf_auto_mcp 工具]
+```
+
+## 处理用户响应
+
+当 windsurf_auto_mcp 返回：
+
+- `should_continue = true`：继续工作，读取用户新指令
+- `should_continue = false`：用户选择结束，可以道别
+
+---
+
+**记住：用户控制对话何时结束，不是 AI。**
+
+IMPORTANT GUIDELINES:
+1. Read the relevant files first before making any changes
+2. Only modify what is necessary, do not refactor other parts
+3. Keep the existing code style and naming conventions
+4. Do not delete existing functions or comments
+5. Ask before modifying if unsure
+6. Verify the code after changes to ensure no syntax errors

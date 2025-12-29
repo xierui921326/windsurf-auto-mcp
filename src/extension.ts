@@ -59,7 +59,7 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('GitHub 链接已复制到剪贴板');
         }),
         vscode.commands.registerCommand('mcpService.copyPrompt', () => {
-            const prompt = '当你完成一个任务时，必须调用 WindsurfAutoMcp 工具询问用户是否继续。没有例外情况，要一直等待响应不得提前终止任务。';
+            const prompt = '当你完成一个任务时，必须调用 windsurf_auto_mcp 工具询问用户是否继续。没有例外情况，要一直等待响应不得提前终止任务。';
             vscode.env.clipboard.writeText(prompt);
             vscode.window.showInformationMessage('提示语已复制到剪贴板');
         }),

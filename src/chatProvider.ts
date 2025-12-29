@@ -1264,7 +1264,7 @@ export class ChatProvider {
         });
     }
 
-    // 处理ask_continue工具的响应
+    // 处理windsurf_auto_mcp工具的响应
     private handleContinueResponse(requestId: string, continueChat: boolean, newInstruction?: string) {
         // 清除待处理请求
         this._pendingRequest = undefined;
@@ -1353,7 +1353,7 @@ export class ChatProvider {
                 // 显示启动无限对话模式的消息
                 this.addMessage('system', '正在启动无限对话模式...', []);
                 this.addMessage('system', '请直接在原生Windsurf编辑器中输入您的指令', []);
-                this.addMessage('system', 'AI处理完成后会自动调用ask_continue工具，确保对话不会结束', []);
+                this.addMessage('system', 'AI处理完成后会自动调用windsurf_auto_mcp工具，确保对话不会结束', []);
                 this.addMessage('system', '您可以在此界面监控对话状态和输入后续指令', []);
 
                 // 将指令复制到剪贴板，方便用户在原生编辑器中使用

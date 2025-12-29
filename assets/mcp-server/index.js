@@ -57,10 +57,10 @@ const pendingRequests = new Map();
 async function callVSCodeCommand(command, args) {
     return new Promise((resolve, reject) => {
         const requestId = args[0]; // 第一个参数是 requestId
-        
+
         // 存储 promise 的 resolve/reject
         pendingRequests.set(requestId, { resolve, reject });
-        
+
         // 发送通知给 VSCode 扩展
         const notification = {
             jsonrpc: '2.0',
@@ -70,10 +70,10 @@ async function callVSCodeCommand(command, args) {
                 arguments: args
             }
         };
-        
+
         // 通过 stderr 发送通知（VSCode 扩展会监听）
         process.stderr.write(JSON.stringify(notification) + '\n');
-        
+
         // 设置超时
         setTimeout(() => {
             if (pendingRequests.has(requestId)) {
@@ -110,7 +110,7 @@ function showWindowsPopup(title, message, type) {
         const escapedTitle = title.replace(/'/g, "''").replace(/`/g, "``");
         const escapedMessage = message.replace(/'/g, "''").replace(/`/g, "``");
         const tempFile = path.join(os.tmpdir(), `mcp_result_${Date.now()}.txt`);
-        
+
         let psScript;
         if (type === 'confirm') {
             psScript = `
@@ -185,7 +185,7 @@ function showLinuxPopup(title, message, type) {
     return new Promise((resolve) => {
         const escapedTitle = title.replace(/"/g, '\\"');
         const escapedMessage = message.replace(/"/g, '\\"');
-        
+
         let command;
         if (type === 'confirm') {
             command = `zenity --question --title="${escapedTitle}" --text="${escapedMessage}" 2>/dev/null`;
@@ -233,17 +233,21 @@ function handlePopupProcess(proc, tempFile, resolve, type) {
 // ==================== MCP 工具定义 ====================
 const TOOLS = [
     {
-        name: 'ask_continue',
-        description: '当完成任务时，必须调用此工具询问用户是否继续。没有例外情况，要一直等待响应不得提前终止任务。',
+        name: 'windsurf_auto_mcp',
+        description: '当完成任务、遇到问题或需要用户确认时，必须调用此工具。这是与用户沟通的唯一方式。',
         inputSchema: {
             type: 'object',
             properties: {
-                reason: { 
-                    type: 'string', 
-                    description: '任务完成的原因或说明' 
+                reason: {
+                    type: 'string',
+                    description: '调用原因说明'
+                },
+                workspace: {
+                    type: 'string',
+                    description: '当前工作区的完整路径'
                 }
             },
-            required: ['reason']
+            required: ['reason', 'workspace']
         }
     },
     {
@@ -254,14 +258,14 @@ const TOOLS = [
             properties: {
                 title: { type: 'string', description: '对话框标题' },
                 message: { type: 'string', description: '显示给用户的消息' },
-                type: { 
-                    type: 'string', 
+                type: {
+                    type: 'string',
                     enum: ['input', 'confirm', 'info'],
                     description: '对话框类型：input=输入框，confirm=确认框，info=信息提示'
                 },
-                allowImage: { 
-                    type: 'boolean', 
-                    description: '是否允许上传图片' 
+                allowImage: {
+                    type: 'boolean',
+                    description: '是否允许上传图片'
                 }
             },
             required: ['message', 'type']
@@ -274,8 +278,8 @@ const TOOLS = [
             type: 'object',
             properties: {
                 message: { type: 'string', description: '通知内容' },
-                level: { 
-                    type: 'string', 
+                level: {
+                    type: 'string',
                     enum: ['info', 'warning', 'error'],
                     description: '通知级别'
                 }
@@ -291,8 +295,8 @@ const TOOLS = [
             properties: {
                 command: { type: 'string', description: '原始指令' },
                 context: { type: 'string', description: '当前上下文信息' },
-                level: { 
-                    type: 'string', 
+                level: {
+                    type: 'string',
                     enum: ['low', 'medium', 'high'],
                     description: '优化级别'
                 }
@@ -333,8 +337,8 @@ const TOOLS = [
             properties: {
                 projectName: { type: 'string', description: '项目名称' },
                 projectType: { type: 'string', description: '项目类型' },
-                technologies: { 
-                    type: 'array', 
+                technologies: {
+                    type: 'array',
                     items: { type: 'string' },
                     description: '主要技术栈'
                 },
@@ -353,46 +357,48 @@ const TOOLS = [
 ];
 
 // ==================== 工具处理函数 ====================
-async function handleAskContinue(args) {
-    const reason = args.reason || '任务已完成';
-    
-    log('INFO', 'Ask continue called with reason:', reason);
-    
-    // 直接调用 VSCode 扩展的 showContinueDialog 命令
+async function handleWindsurfAutoMcp(args) {
+    const { reason = '任务已完成', workspace } = args;
+
+    log('INFO', `windsurf_auto_mcp called. Reason: ${reason}, Workspace: ${workspace}`);
+
+    // 直接调用 VSCode 扩展的 showContinueDialog 命令 (复用现有 UI)
     try {
         const requestId = `continue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        
+
         // 调用扩展命令显示继续对话框
         const result = await callVSCodeCommand('mcpService.showContinueDialog', [
             requestId,
             reason
         ]);
-        
+
         log('INFO', 'Continue dialog result:', result);
-        
+
         if (result && result.continue) {
-            let responseText = `结果: should_continue=true`;
+            let responseText = `should_continue = true`;
             if (result.newInstruction && result.newInstruction.trim()) {
-                responseText += `\n\n用户新指令: ${result.newInstruction}\n\n请立即执行用户的新指令，完成后再次调用 ask_continue 工具询问是否继续。`;
+                responseText += `\n\n用户新指令: ${result.newInstruction}\n\n收到新指令，请立即执行。`;
+                log('INFO', 'User provided new instruction');
             } else {
-                responseText += `\n\n用户选择继续对话，请等待用户的下一个指令，或主动询问用户需要什么帮助。完成后必须再次调用 ask_continue 工具。`;
+                responseText += `\n\n用户选择继续对话，请等待下一步指令。`;
+                log('INFO', 'User continues without instruction');
             }
             return { content: [{ type: 'text', text: responseText }] };
         } else {
-            return { content: [{ type: 'text', text: '结果: should_continue=false\n\n用户选择结束对话。感谢使用！' }] };
+            return { content: [{ type: 'text', text: 'should_continue = false\n\n用户选择结束对话。' }] };
         }
     } catch (error) {
-        log('ERROR', 'Failed to call VSCode command for ask_continue:', error.message);
-        
-        // 回退到本地弹窗，但仍然尝试与Infinite Ask交互
+        log('ERROR', 'Failed to call VSCode command for windsurf_auto_mcp:', error.message);
+
+        // 回退到本地弹窗 (fallback)
         try {
             const result = await showLocalPopup(
-                '继续对话？', 
-                `AI想要结束对话的原因：\n${reason}\n\n是否继续？`, 
+                'Windsurf Auto MCP',
+                `AI 暂停原因：\n${reason}\n\n是否继续对话？`,
                 'confirm'
             );
-            
-            let responseText = `结果: should_continue=${result}`;
+
+            let responseText = `should_continue = ${result}`;
             if (result) {
                 const instruction = await showLocalPopup(
                     '新指令',
@@ -400,25 +406,21 @@ async function handleAskContinue(args) {
                     'input'
                 );
                 if (instruction && instruction.trim()) {
-                    responseText += `\n\n用户新指令: ${instruction}\n\n请立即执行用户的新指令，完成后再次调用 ask_continue 工具询问是否继续。`;
-                } else {
-                    responseText += `\n\n用户选择继续对话，请等待用户的下一个指令。`;
+                    responseText += `\n\n用户新指令: ${instruction}`;
                 }
-            } else {
-                responseText += `\n\n用户选择结束对话。感谢使用！`;
             }
-            
+
             return { content: [{ type: 'text', text: responseText }] };
         } catch (fallbackError) {
             log('ERROR', 'Fallback popup also failed:', fallbackError.message);
-            return { content: [{ type: 'text', text: '结果: should_continue=false\n\n无法显示继续对话框，对话结束。' }] };
+            return { content: [{ type: 'text', text: 'should_continue = false\n\n无法与用户交互，对话结束。' }] };
         }
     }
 }
 
 async function handleAskUser(args) {
     const { title = '用户输入', message, type, allowImage = false } = args;
-    
+
     // 使用 VSCode 扩展命令而不是本地弹窗
     try {
         if (type === 'confirm' || type === 'input' || !type) {
@@ -428,7 +430,7 @@ async function handleAskUser(args) {
                 message,
                 allowImage
             ]);
-            
+
             if (type === 'confirm') {
                 return { content: [{ type: 'text', text: result ? 'true' : 'false' }] };
             } else {
@@ -471,7 +473,7 @@ async function handleNotify(args) {
 
 async function handleOptimizeCommand(args) {
     const { command, context = '', level = 'medium' } = args;
-    
+
     // 简单的指令优化逻辑
     let optimized = command;
     if (optimizationSettings.enabled) {
@@ -481,12 +483,12 @@ async function handleOptimizeCommand(args) {
             optimized += '.';
         }
     }
-    
-    return { 
-        content: [{ 
-            type: 'text', 
-            text: `优化后的指令: ${optimized}\n优化级别: ${level}\n上下文: ${context}` 
-        }] 
+
+    return {
+        content: [{
+            type: 'text',
+            text: `优化后的指令: ${optimized}\n优化级别: ${level}\n上下文: ${context}`
+        }]
     };
 }
 
@@ -499,27 +501,27 @@ async function handleSaveCommandHistory(args) {
         context,
         success
     };
-    
+
     commandHistory.push(entry);
     // 保持最近 100 条记录
     if (commandHistory.length > 100) {
         commandHistory = commandHistory.slice(-100);
     }
-    
+
     return { content: [{ type: 'text', text: 'command_history_saved' }] };
 }
 
 async function handleGetCommandHistory(args) {
     const { limit = 10, filter } = args;
     let history = commandHistory.slice(-limit);
-    
+
     if (filter) {
-        history = history.filter(entry => 
-            entry.command.includes(filter) || 
+        history = history.filter(entry =>
+            entry.command.includes(filter) ||
             (entry.optimized && entry.optimized.includes(filter))
         );
     }
-    
+
     const historyText = history.map((entry, index) => {
         const date = new Date(entry.timestamp).toLocaleString('zh-CN');
         const status = entry.success ? '✓' : '✗';
@@ -529,44 +531,44 @@ async function handleGetCommandHistory(args) {
         }
         return text;
     }).join('\n\n');
-    
+
     return { content: [{ type: 'text', text: historyText || '暂无历史记录' }] };
 }
 
 async function handleUpdateContextSummary(args) {
     const { projectName, projectType, technologies, currentTask } = args;
-    
+
     if (projectName) contextSummary.projectName = projectName;
     if (projectType) contextSummary.projectType = projectType;
     if (technologies) contextSummary.mainTechnologies = technologies;
     if (currentTask) contextSummary.currentTask = currentTask;
     contextSummary.lastUpdate = Date.now();
-    
+
     return { content: [{ type: 'text', text: 'context_summary_updated' }] };
 }
 
 async function handleGetContextSummary(args) {
-    const lastUpdateText = contextSummary.lastUpdate 
+    const lastUpdateText = contextSummary.lastUpdate
         ? new Date(contextSummary.lastUpdate).toLocaleString('zh-CN')
         : '未知';
-    
+
     const summaryText = `项目上下文摘要：\n\n` +
         `项目名称：${contextSummary.projectName || '未设置'}\n` +
         `项目类型：${contextSummary.projectType || '未设置'}\n` +
         `主要技术：${contextSummary.mainTechnologies.join(', ') || '未设置'}\n` +
         `当前任务：${contextSummary.currentTask || '未设置'}\n` +
         `最后更新：${lastUpdateText}`;
-    
+
     return { content: [{ type: 'text', text: summaryText }] };
 }
 
 // ==================== 工具调用处理 ====================
 async function handleToolCall(name, args) {
     log('INFO', `Tool call: ${name}`, args);
-    
+
     switch (name) {
-        case 'ask_continue':
-            return await handleAskContinue(args);
+        case 'windsurf_auto_mcp':
+            return await handleWindsurfAutoMcp(args);
         case 'ask_user':
             return await handleAskUser(args);
         case 'notify':
@@ -599,7 +601,7 @@ function sendError(id, code, message) {
 
 async function handleRequest(request) {
     const { method, id, params } = request;
-    
+
     try {
         switch (method) {
             case 'initialize':
@@ -609,21 +611,21 @@ async function handleRequest(request) {
                     capabilities: { tools: {} }
                 });
                 break;
-                
+
             case 'tools/list':
                 sendResponse(id, { tools: TOOLS });
                 break;
-                
+
             case 'tools/call':
                 const result = await handleToolCall(params.name, params.arguments || {});
                 sendResponse(id, result);
                 break;
-                
+
             case 'initialized':
             case 'notifications/cancelled':
                 // 这些方法不需要响应
                 break;
-                
+
             default:
                 if (id !== undefined) {
                     sendError(id, -32601, `Unknown method: ${method}`);
@@ -646,7 +648,7 @@ const rl = readline.createInterface({
 
 rl.on('line', async (line) => {
     if (!line.trim()) return;
-    
+
     try {
         const request = JSON.parse(line);
         await handleRequest(request);
