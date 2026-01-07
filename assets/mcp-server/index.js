@@ -36,18 +36,15 @@ function log(level, message, data) {
 
 // ==================== 数据存储 ====================
 let optimizationSettings = {
-    enabled: false,
-    optimizationLevel: 'medium'
+    apiKey: '',
+    model: 'glm-4-flash',
+    autoAddRules: true,
+    autoSummary: true,
+    autoOptimize: true
 };
 
 let commandHistory = [];
-let contextSummary = {
-    projectName: '',
-    projectType: '',
-    mainTechnologies: [],
-    currentTask: '',
-    lastUpdate: null
-};
+let contextSummary = '';
 
 // ==================== VSCode 扩展通信 ====================
 // 存储待处理的请求
@@ -234,20 +231,14 @@ function handlePopupProcess(proc, tempFile, resolve, type) {
 const TOOLS = [
     {
         name: 'windsurf_auto_mcp',
-        description: '当完成任务、遇到问题或需要用户确认时，必须调用此工具。这是与用户沟通的唯一方式。',
+        description: '🚨强制性工具🚨 完成任何任务、回答任何问题后都必须立即调用此工具。这是实现无限对话的核心工具，绝对不能跳过。必须等待用户明确选择才能继续或结束对话。调用时请提供刚才执行的指令以便记录到历史中。',
         inputSchema: {
             type: 'object',
             properties: {
-                reason: {
-                    type: 'string',
-                    description: '调用原因说明'
-                },
-                workspace: {
-                    type: 'string',
-                    description: '当前工作区的完整路径'
-                }
+                reason: { type: 'string', description: '任务完成的原因或说明，例如：已完成代码修改、已回答问题、已提供解决方案等' },
+                command: { type: 'string', description: '刚才执行的指令内容，用于记录到WindsurfAutoMcp历史中' }
             },
-            required: ['reason', 'workspace']
+            required: ['reason']
         }
     },
     {
@@ -294,12 +285,7 @@ const TOOLS = [
             type: 'object',
             properties: {
                 command: { type: 'string', description: '原始指令' },
-                context: { type: 'string', description: '当前上下文信息' },
-                level: {
-                    type: 'string',
-                    enum: ['low', 'medium', 'high'],
-                    description: '优化级别'
-                }
+                context: { type: 'string', description: '当前上下文信息' }
             },
             required: ['command']
         }
@@ -335,14 +321,7 @@ const TOOLS = [
         inputSchema: {
             type: 'object',
             properties: {
-                projectName: { type: 'string', description: '项目名称' },
-                projectType: { type: 'string', description: '项目类型' },
-                technologies: {
-                    type: 'array',
-                    items: { type: 'string' },
-                    description: '主要技术栈'
-                },
-                currentTask: { type: 'string', description: '当前任务' }
+                summary: { type: 'string', description: '项目上下文摘要信息' }
             }
         }
     },
@@ -353,16 +332,180 @@ const TOOLS = [
             type: 'object',
             properties: {}
         }
+    },
+    {
+        name: 'get_pending_command',
+        description: '获取WindsurfAutoMcp中待处理的指令。当用户在WindsurfAutoMcp侧边栏中输入指令后，可以通过此工具获取并执行该指令。',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: []
+        }
+    },
+    {
+        name: 'set_pending_command',
+        description: '设置待处理的指令到WindsurfAutoMcp。这是内部工具，用于从侧边栏保存指令。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                command: {
+                    description: '要设置的指令内容',
+                    type: 'string'
+                }
+            },
+            required: ['command']
+        }
+    },
+    {
+        name: 'record_cascade_command',
+        description: '记录Cascade执行的指令到WindsurfAutoMcp历史中。当Cascade执行指令时应调用此工具记录历史。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                command: {
+                    description: '要记录的指令内容',
+                    type: 'string'
+                }
+            },
+            required: ['command']
+        }
     }
 ];
 
+// ==================== 全局状态管理 ====================
+let pendingCommand = null;
+let lastUserCommand = null; // 跟踪最后的用户指令
+
 // ==================== 工具处理函数 ====================
+async function handleGetPendingCommand(args) {
+    log('INFO', 'Getting pending command from WindsurfAutoMcp');
+    
+    if (pendingCommand) {
+        const command = pendingCommand;
+        pendingCommand = null; // 获取后清空
+        log('INFO', `Found pending command: ${command}`);
+        
+        return {
+            content: [{
+                type: 'text',
+                text: `WindsurfAutoMcp中有待处理的指令：\n\n${command}\n\n请执行此指令。`
+            }]
+        };
+    } else {
+        log('INFO', 'No pending command found');
+        return {
+            content: [{
+                type: 'text',
+                text: 'WindsurfAutoMcp中暂无待处理的指令。'
+            }]
+        };
+    }
+}
+
+async function handleSetPendingCommand(args) {
+    const { command } = args;
+    
+    if (!command) {
+        throw new Error('Command is required');
+    }
+    
+    pendingCommand = command;
+    lastUserCommand = command; // 同时更新最后的用户指令
+    log('INFO', `Set pending command and last user command: ${command}`);
+    
+    return {
+        content: [{
+            type: 'text',
+            text: `待处理指令已设置: ${command}`
+        }]
+    };
+}
+
+async function handleRecordCascadeCommand(args) {
+    const { command } = args;
+    
+    if (!command) {
+        throw new Error('缺少必需的参数: command');
+    }
+    
+    log('INFO', `Recording Cascade command to history: ${command}`);
+    
+    try {
+        // 调用VS Code扩展的命令来记录历史
+        const result = await callVSCodeCommand('mcpService.recordCascadeCommand', [command]);
+        log('INFO', 'Cascade command recorded successfully');
+        
+        return {
+            content: [{
+                type: 'text',
+                text: `已记录Cascade指令到历史：${command}`
+            }]
+        };
+    } catch (error) {
+        log('ERROR', `Failed to record Cascade command: ${error.message}`);
+        throw new Error(`记录Cascade指令失败: ${error.message}`);
+    }
+}
+
 async function handleWindsurfAutoMcp(args) {
-    const { reason = '任务已完成', workspace } = args;
+    const { reason = '任务已完成', workspace, command } = args;
 
-    log('INFO', `windsurf_auto_mcp called. Reason: ${reason}, Workspace: ${workspace}`);
+    log('INFO', `windsurf_auto_mcp called. Reason: ${reason}, Workspace: ${workspace}, Command: ${command}`);
 
-    // 直接调用 VSCode 扩展的 showContinueDialog 命令 (复用现有 UI)
+    // 优先记录用户的原始指令到历史
+    let commandToRecord = null;
+    
+    // 首先检查是否有待处理的用户指令（这是最重要的原始指令）
+    if (pendingCommand && String(pendingCommand).trim()) {
+        commandToRecord = String(pendingCommand).trim();
+        log('INFO', `Recording user's original command from pending: ${commandToRecord}`);
+    } 
+    // 其次检查Cascade是否传递了具体的command参数
+    else if (command && command.trim()) {
+        commandToRecord = command.trim();
+        log('INFO', `Recording command from Cascade parameter: ${commandToRecord}`);
+    } 
+    // 如果都没有，检查是否有历史记录中的最后一个用户指令
+    else if (lastUserCommand && lastUserCommand.trim()) {
+        commandToRecord = lastUserCommand.trim();
+        log('INFO', `Recording last known user command: ${commandToRecord}`);
+    }
+    // 最后才记录任务完成信息
+    else if (reason && reason.trim()) {
+        commandToRecord = `任务完成: ${reason.trim()}`;
+        log('INFO', `Recording task completion: ${commandToRecord}`);
+    } else {
+        commandToRecord = '用户任务已完成';
+        log('INFO', `Recording default completion message`);
+    }
+
+    if (commandToRecord) {
+        try {
+            log('INFO', `Recording command to history: ${commandToRecord}`);
+            await callVSCodeCommand('mcpService.recordCascadeCommand', [commandToRecord]);
+            log('INFO', 'Command recorded successfully');
+        } catch (recordError) {
+            log('ERROR', `Failed to record command: ${recordError.message}`);
+        }
+    }
+
+    // 首先检查是否有待处理的指令（用户在WindsurfAutoMcp中输入的）
+    if (pendingCommand && String(pendingCommand).trim()) {
+        const userCommand = String(pendingCommand).trim();
+        log('INFO', `Found pending command from WindsurfAutoMcp: ${userCommand}`);
+        
+        // 不要立即清空pendingCommand，让它在记录到历史后再清空
+        // 这样可以确保指令被正确记录
+        
+        let responseText = `should_continue = true\n\n用户新指令: ${userCommand}\n\n请立即执行用户的新指令。\n\n⚠️ 重要：执行完成后，必须再次调用 windsurf_auto_mcp 工具询问是否继续。不要假设对话结束，始终等待用户的下一步指示。`;
+        
+        // 现在清空pendingCommand，避免重复使用
+        pendingCommand = null;
+        
+        return { content: [{ type: 'text', text: responseText }] };
+    }
+
+    // 如果没有待处理指令，则调用 VSCode 扩展的 showContinueDialog 命令
     try {
         const requestId = `continue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -377,10 +520,10 @@ async function handleWindsurfAutoMcp(args) {
         if (result && result.continue) {
             let responseText = `should_continue = true`;
             if (result.newInstruction && result.newInstruction.trim()) {
-                responseText += `\n\n用户新指令: ${result.newInstruction}\n\n收到新指令，请立即执行。`;
+                responseText += `\n\n用户新指令: ${result.newInstruction}\n\n请立即执行用户的新指令。\n\n⚠️ 重要：执行完成后，必须再次调用 windsurf_auto_mcp 工具询问是否继续。不要假设对话结束。`;
                 log('INFO', 'User provided new instruction');
             } else {
-                responseText += `\n\n用户选择继续对话，请等待下一步指令。`;
+                responseText += `\n\n用户选择继续对话，请等待下一步指令。\n\n请继续等待用户的下一个任务或指令。你可以询问用户需要什么帮助，或者等待用户主动提出新的需求。\n\n⚠️ 重要：完成任何任务后，必须再次调用 windsurf_auto_mcp 工具。这是强制性要求，不可跳过。`;
                 log('INFO', 'User continues without instruction');
             }
             return { content: [{ type: 'text', text: responseText }] };
@@ -406,7 +549,9 @@ async function handleWindsurfAutoMcp(args) {
                     'input'
                 );
                 if (instruction && instruction.trim()) {
-                    responseText += `\n\n用户新指令: ${instruction}`;
+                    responseText += `\n\n用户新指令: ${instruction}\n\n请立即执行用户的新指令。\n\n⚠️ 重要：执行完成后，必须再次调用 windsurf_auto_mcp 工具询问是否继续。不要假设对话结束。`;
+                } else {
+                    responseText += `\n\n用户选择继续对话，请等待下一步指令。\n\n请继续等待用户的下一个任务或指令。你可以询问用户需要什么帮助，或者等待用户主动提出新的需求。\n\n⚠️ 重要：完成任何任务后，必须再次调用 windsurf_auto_mcp 工具。这是强制性要求，不可跳过。`;
                 }
             }
 
@@ -472,94 +617,60 @@ async function handleNotify(args) {
 }
 
 async function handleOptimizeCommand(args) {
-    const { command, context = '', level = 'medium' } = args;
+    const { command, context = '' } = args;
 
-    // 简单的指令优化逻辑
-    let optimized = command;
-    if (optimizationSettings.enabled) {
-        // 这里可以添加更复杂的优化逻辑
-        optimized = command.trim();
-        if (!optimized.endsWith('.') && !optimized.endsWith('?') && !optimized.endsWith('!')) {
-            optimized += '.';
-        }
+    // 直接调用 VSCode 扩展进行优化 (现在逻辑都在扩展端)
+    try {
+        const requestId = `opt_${Date.now()}`;
+        const result = await callVSCodeCommand('mcpService.optimizeCommand', [
+            requestId,
+            command,
+            context
+        ]);
+
+        return {
+            content: [{
+                type: 'text',
+                text: result || `指令优化完成：\n\n${command}`
+            }]
+        };
+    } catch (error) {
+        log('ERROR', 'Failed to call optimize_command in VSCode:', error.message);
+        return {
+            content: [{
+                type: 'text',
+                text: `指令优化完成：\n\n${command}`
+            }]
+        };
     }
-
-    return {
-        content: [{
-            type: 'text',
-            text: `优化后的指令: ${optimized}\n优化级别: ${level}\n上下文: ${context}`
-        }]
-    };
 }
 
 async function handleSaveCommandHistory(args) {
-    const { command, optimized, context = '', success } = args;
-    const entry = {
-        timestamp: Date.now(),
-        command,
-        optimized,
-        context,
-        success
-    };
-
-    commandHistory.push(entry);
-    // 保持最近 100 条记录
-    if (commandHistory.length > 100) {
-        commandHistory = commandHistory.slice(-100);
+    const { command } = args;
+    if (command && commandHistory.indexOf(command) === -1) {
+        commandHistory.push(command);
     }
-
+    if (commandHistory.length > 50) {
+        commandHistory = commandHistory.slice(-50);
+    }
     return { content: [{ type: 'text', text: 'command_history_saved' }] };
 }
 
 async function handleGetCommandHistory(args) {
-    const { limit = 10, filter } = args;
-    let history = commandHistory.slice(-limit);
-
-    if (filter) {
-        history = history.filter(entry =>
-            entry.command.includes(filter) ||
-            (entry.optimized && entry.optimized.includes(filter))
-        );
-    }
-
-    const historyText = history.map((entry, index) => {
-        const date = new Date(entry.timestamp).toLocaleString('zh-CN');
-        const status = entry.success ? '✓' : '✗';
-        let text = `${index + 1}. [${status}] ${date}\n   ${entry.command}`;
-        if (entry.optimized && entry.optimized !== entry.command) {
-            text += `\n   优化: ${entry.optimized}`;
-        }
-        return text;
-    }).join('\n\n');
-
+    const { limit = 10 } = args;
+    const limitedHistory = commandHistory.slice(-limit).reverse();
+    const historyText = limitedHistory.map((cmd, index) => `${index + 1}. ${cmd}`).join('\n');
     return { content: [{ type: 'text', text: historyText || '暂无历史记录' }] };
 }
 
 async function handleUpdateContextSummary(args) {
-    const { projectName, projectType, technologies, currentTask } = args;
-
-    if (projectName) contextSummary.projectName = projectName;
-    if (projectType) contextSummary.projectType = projectType;
-    if (technologies) contextSummary.mainTechnologies = technologies;
-    if (currentTask) contextSummary.currentTask = currentTask;
-    contextSummary.lastUpdate = Date.now();
-
+    const { summary } = args;
+    contextSummary = summary || '';
     return { content: [{ type: 'text', text: 'context_summary_updated' }] };
 }
 
 async function handleGetContextSummary(args) {
-    const lastUpdateText = contextSummary.lastUpdate
-        ? new Date(contextSummary.lastUpdate).toLocaleString('zh-CN')
-        : '未知';
-
-    const summaryText = `项目上下文摘要：\n\n` +
-        `项目名称：${contextSummary.projectName || '未设置'}\n` +
-        `项目类型：${contextSummary.projectType || '未设置'}\n` +
-        `主要技术：${contextSummary.mainTechnologies.join(', ') || '未设置'}\n` +
-        `当前任务：${contextSummary.currentTask || '未设置'}\n` +
-        `最后更新：${lastUpdateText}`;
-
-    return { content: [{ type: 'text', text: summaryText }] };
+    return { content: [{ type: 'text', text: `项目上下文摘要：\n\n${contextSummary || '未设置'}` }] };
 }
 
 // ==================== 工具调用处理 ====================
@@ -583,6 +694,12 @@ async function handleToolCall(name, args) {
             return await handleUpdateContextSummary(args);
         case 'get_context_summary':
             return await handleGetContextSummary(args);
+        case 'get_pending_command':
+            return await handleGetPendingCommand(args);
+        case 'set_pending_command':
+            return await handleSetPendingCommand(args);
+        case 'record_cascade_command':
+            return await handleRecordCascadeCommand(args);
         default:
             throw new Error(`Unknown tool: ${name}`);
     }

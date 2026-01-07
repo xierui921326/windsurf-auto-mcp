@@ -47,24 +47,8 @@
     },
     "commands": [
       {
-        "command": "mcpService.startServer",
-        "title": "WindsurfAutoMcp: 启动服务器"
-      },
-      {
-        "command": "mcpService.stopServer",
-        "title": "WindsurfAutoMcp: 停止服务器"
-      },
-      {
-        "command": "mcpService.configWindsurf",
-        "title": "WindsurfAutoMcp: 配置 Windsurf"
-      },
-      {
-        "command": "mcpService.showStats",
-        "title": "WindsurfAutoMcp: 显示统计"
-      },
-      {
         "command": "mcpService.toggleDialog",
-        "title": "WindsurfAutoMcp: 切换对话框 (Ctrl+M)"
+        "title": "WindsurfAutoMcp: 开启对话窗口 (Ctrl+M)"
       }
     ],
     "keybindings": [
@@ -99,12 +83,33 @@
         "mcpService.autoShowChat": {
           "type": "boolean",
           "default": false,
-          "description": "启动时自动显示聊天界面"
+          "description": "启动时自动显示 WindsurfAutoMcp 界面"
         },
         "mcpService.optimizationEnabled": {
           "type": "boolean",
           "default": false,
           "description": "启用指令优化功能"
+        },
+        "windsurfAutoMcp.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "智谱 AI API Key（用于指令优化和上下文摘要）"
+        },
+        "windsurfAutoMcp.model": {
+          "type": "string",
+          "enum": ["GLM-4.5-Flash", "GLM-4-Flash", "custom"],
+          "default": "GLM-4.5-Flash",
+          "description": "选择使用的 AI 模型"
+        },
+        "windsurfAutoMcp.additionalRules": {
+          "type": "string",
+          "default": "请遵循以下规则：\n1. 用中文回复\n2. 提供详细的解释和示例\n3. 如果涉及代码，请提供完整可运行的代码\n4. 优先考虑最佳实践和安全性\n5. 如有疑问请主动询问澄清",
+          "description": "每次发送时自动追加的内容"
+        },
+        "windsurfAutoMcp.autoOptimize": {
+          "type": "boolean",
+          "default": false,
+          "description": "开启后自动优化指令再发送"
         }
       }
     }

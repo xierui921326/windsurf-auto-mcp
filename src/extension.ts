@@ -1,13 +1,11 @@
 import * as vscode from 'vscode';
 import { initializeMcpTools } from './mcpTools';
-import { initializeConfigManager, autoCreateRulesIfNeeded, configureWindsurf, resetDefaults } from './configManager';
-import { ChatProvider } from './chatProvider';
+import { initializeConfigManager, autoCreateRulesIfNeeded, configureWindsurf, resetDefaults, notifyWindsurfRefresh } from './configManager';
 import { initializeServerManager, startServer, stopServer, restartServer } from './serverManager';
 import { SidebarProvider } from './sidebarProvider';
 
 let outputChannel: vscode.OutputChannel;
 let extensionContext: vscode.ExtensionContext;
-let chatProvider: ChatProvider;
 let sidebarProvider: SidebarProvider;
 
 // ==================== 扩展激活 ====================
@@ -22,9 +20,6 @@ export function activate(context: vscode.ExtensionContext) {
     initializeConfigManager(outputChannel);
     initializeServerManager(context, outputChannel);
 
-    // 初始化聊天提供者
-    chatProvider = new ChatProvider(context.extensionUri);
-    chatProvider.setContext(context);
 
     // 初始化侧边栏提供者
     sidebarProvider = new SidebarProvider(context.extensionUri, context);
@@ -64,14 +59,17 @@ export function activate(context: vscode.ExtensionContext) {
             vscode.window.showInformationMessage('提示语已复制到剪贴板');
         }),
         vscode.commands.registerCommand('mcpService.showInputDialog', (requestId: string, title: string, message: string, allowImage: boolean = false) => {
-            // 自动打开 Chat Panel 并显示用户请求
-            chatProvider.openChatPanel();
-            chatProvider.showUserRequest(requestId, title, message, 'input', allowImage);
+            // 显示用户请求到侧边栏
+            sidebarProvider.showUserRequest(requestId, title, message, 'input');
         }),
         vscode.commands.registerCommand('mcpService.showContinueDialog', (requestId: string, reason: string) => {
-            // 自动打开 Chat Panel 并显示继续对话请求
-            chatProvider.openChatPanel();
-            chatProvider.showUserRequest(requestId, '继续对话', reason, 'continue', false);
+            // 显示继续对话请求到侧边栏
+            sidebarProvider.showUserRequest(requestId, '继续对话', reason, 'continue');
+        }),
+        vscode.commands.registerCommand('mcpService.recordCascadeCommand', (command: string) => {
+            // 记录Cascade执行的指令到历史
+            sidebarProvider.recordCascadeCommandToHistory(command);
+            return { success: true };
         }),
         vscode.commands.registerCommand('mcpService.startServer', () => {
             const config = vscode.workspace.getConfiguration('mcpService');
@@ -84,58 +82,69 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('mcpService.restartServer', () => {
             restartServer();
         }),
-        vscode.commands.registerCommand('mcpService.showStats', () => {
-            // 显示统计信息的逻辑可以后续添加
-            vscode.window.showInformationMessage('统计功能开发中...');
-        }),
         vscode.commands.registerCommand('mcpService.toggleDialog', () => {
-            // 打开右侧拆分编辑器面板
-            chatProvider.openChatPanel();
+            // 显示侧边栏面板
+            vscode.commands.executeCommand('workbench.view.extension.mcpServicePanel');
         }),
-        vscode.commands.registerCommand('mcpService.clearChatHistory', () => {
-            if (chatProvider) {
-                chatProvider.clearChatHistory();
-            }
+        vscode.commands.registerCommand('mcpService.optimizeCommand', async (requestId: string, command: string, context?: string) => {
+            // 使用sidebarProvider的优化功能
+            return await sidebarProvider.optimizeCommandExternally(requestId, command, context);
         })
     );
 
     // 自动创建规则文件（如果需要）
     autoCreateRulesIfNeeded();
 
-    // 自动配置 Windsurf MCP（如果需要）
-    setTimeout(async () => {
-        try {
-            await configureWindsurf();
-            outputChannel.appendLine('Windsurf MCP 配置检查完成');
-        } catch (error) {
-            outputChannel.appendLine(`Windsurf MCP 配置检查失败: ${error}`);
-        }
-    }, 500);
-
-    // 检查是否需要自动启动服务器
+    // 改进的启动序列：先配置，再启动服务器，最后通知Windsurf刷新
     const config = vscode.workspace.getConfiguration('mcpService');
     const autoStart = config.get<boolean>('autoStart', true);
 
     if (autoStart) {
-        // 延迟启动服务器，确保扩展完全加载
-        setTimeout(() => {
-            const port = config.get<number>('port', 3456);
-            startServer(port);
-            outputChannel.appendLine('MCP 服务器已自动启动');
+        // 延迟启动，确保扩展完全加载
+        setTimeout(async () => {
+            try {
+                // 1. 先配置 Windsurf MCP
+                await configureWindsurf();
+                outputChannel.appendLine('Windsurf MCP 配置完成');
+
+                // 2. 启动服务器
+                const port = config.get<number>('port', 3456);
+                await startServer(port);
+                outputChannel.appendLine('MCP 服务器已启动');
+
+                // 3. 等待服务器完全启动后，通知Windsurf刷新MCP配置
+                setTimeout(async () => {
+                    await notifyWindsurfRefresh();
+                    outputChannel.appendLine('已通知Windsurf刷新MCP配置');
+                }, 2000);
+
+            } catch (error) {
+                outputChannel.appendLine(`自动启动失败: ${error}`);
+            }
         }, 1000);
+    } else {
+        // 即使不自动启动服务器，也要检查配置
+        setTimeout(async () => {
+            try {
+                await configureWindsurf();
+                outputChannel.appendLine('Windsurf MCP 配置检查完成');
+            } catch (error) {
+                outputChannel.appendLine(`Windsurf MCP 配置检查失败: ${error}`);
+            }
+        }, 500);
     }
 
-    // 检查是否需要自动显示聊天界面
+    // 检查是否需要自动显示界面
     const autoShowChat = config.get<boolean>('autoShowChat', false);
 
     if (autoShowChat) {
-        // 延迟一秒后自动打开聊天界面，确保扩展完全加载
+        // 延迟一秒后自动打开侧边栏界面
         setTimeout(() => {
-            chatProvider.openChatPanel();
+            vscode.commands.executeCommand('workbench.view.extension.mcpServicePanel');
         }, 2000);
-        outputChannel.appendLine('Infinite Ask 聊天界面已自动打开');
+        outputChannel.appendLine('WindsurfAutoMcp 界面已自动打开');
     } else {
-        outputChannel.appendLine('Infinite Ask 聊天界面可通过 Ctrl+M 或命令面板打开');
+        outputChannel.appendLine('WindsurfAutoMcp 界面可通过 Ctrl+M 或命令面板打开');
     }
 
     outputChannel.appendLine('WindsurfAutoMcp 扩展激活完成');

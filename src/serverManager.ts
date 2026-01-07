@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import * as http from 'http';
-import { 
+import {
     MCP_TOOLS,
-    handleOptimizeCommand, 
-    handleSaveCommandHistory, 
-    handleGetCommandHistory, 
-    handleUpdateContextSummary, 
-    handleGetContextSummary 
+    handleOptimizeCommand,
+    handleSaveCommandHistory,
+    handleGetCommandHistory,
+    handleUpdateContextSummary,
+    handleGetContextSummary,
+    getPendingCommand
 } from './mcpTools';
 
 let mcpServer: http.Server | null = null;
@@ -202,7 +203,7 @@ async function handleToolCall(name: string, args: any): Promise<any> {
             stats.notifyCalls++;
             result = await handleNotify(args);
             break;
-        case 'ask_continue':
+        case 'windsurf_auto_mcp':
             stats.askContinueCalls++;
             result = await handleAskContinue(args);
             break;
@@ -231,11 +232,11 @@ async function handleToolCall(name: string, args: any): Promise<any> {
 
 async function handleAskUser(args: any): Promise<any> {
     const { message, title = '用户输入', type = 'input', allowImage = false } = args;
-    
+
     return new Promise((resolve) => {
         const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        pendingRequests.set(requestId, { resolve, reject: () => {} });
-        
+        pendingRequests.set(requestId, { resolve, reject: () => { } });
+
         // 通过命令调用聊天界面显示对话框
         vscode.commands.executeCommand('mcpService.showInputDialog', requestId, title, message, allowImage);
     });
@@ -243,7 +244,7 @@ async function handleAskUser(args: any): Promise<any> {
 
 async function handleNotify(args: any): Promise<any> {
     const { message, level = 'info' } = args;
-    
+
     switch (level) {
         case 'error':
             vscode.window.showErrorMessage(message);
@@ -254,7 +255,7 @@ async function handleNotify(args: any): Promise<any> {
         default:
             vscode.window.showInformationMessage(message);
     }
-    
+
     return {
         content: [{
             type: 'text',
@@ -264,15 +265,27 @@ async function handleNotify(args: any): Promise<any> {
 }
 
 async function handleAskContinue(args: any): Promise<any> {
-    const { reason } = args;
-    
+    const { reason, command } = args;
+
+    // 记录 Cascade 执行的指令到历史：
+    // 1) 如果 Cascade 传了 command，优先使用
+    // 2) 否则兜底用侧边栏保存的 pending command
+    try {
+        const cmdToRecord = (command && String(command).trim()) ? String(command).trim() : getPendingCommand();
+        if (cmdToRecord) {
+            await vscode.commands.executeCommand('mcpService.recordCascadeCommand', cmdToRecord);
+        }
+    } catch (error) {
+        outputChannel.appendLine(`记录Cascade指令到历史失败: ${error}`);
+    }
+
     return new Promise((resolve) => {
         const requestId = `continue_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        pendingRequests.set(requestId, { resolve, reject: () => {} });
-        
+        pendingRequests.set(requestId, { resolve, reject: () => { } });
+
         // 通过命令调用Infinite Ask界面显示继续对话框
         vscode.commands.executeCommand('mcpService.showContinueDialog', requestId, reason);
-        
+
         // 设置超时处理
         setTimeout(() => {
             if (pendingRequests.has(requestId)) {
@@ -292,7 +305,7 @@ export function handleWebviewResponse(requestId: string, value: any) {
     const pending = pendingRequests.get(requestId);
     if (pending) {
         pendingRequests.delete(requestId);
-        
+
         if (requestId.startsWith('continue_')) {
             // 处理继续对话的响应
             if (value && value.continue) {
@@ -344,7 +357,7 @@ function loadStats(context: vscode.ExtensionContext) {
 // 处理来自聊天界面的用户响应
 export function handleChatResponse(requestId: string, userResponse: string, type: 'input' | 'confirm' | 'continue') {
     let result: any;
-    
+
     switch (type) {
         case 'input':
             result = {
@@ -355,9 +368,9 @@ export function handleChatResponse(requestId: string, userResponse: string, type
             };
             break;
         case 'confirm':
-            const confirmed = userResponse.toLowerCase().includes('是') || 
-                            userResponse.toLowerCase().includes('yes') || 
-                            userResponse.toLowerCase().includes('确认');
+            const confirmed = userResponse.toLowerCase().includes('是') ||
+                userResponse.toLowerCase().includes('yes') ||
+                userResponse.toLowerCase().includes('确认');
             result = {
                 content: [{
                     type: 'text',
@@ -366,9 +379,9 @@ export function handleChatResponse(requestId: string, userResponse: string, type
             };
             break;
         case 'continue':
-            const shouldContinue = userResponse.toLowerCase().includes('继续') || 
-                                  userResponse.toLowerCase().includes('是') ||
-                                  userResponse.toLowerCase().includes('yes');
+            const shouldContinue = userResponse.toLowerCase().includes('继续') ||
+                userResponse.toLowerCase().includes('是') ||
+                userResponse.toLowerCase().includes('yes');
             result = {
                 content: [{
                     type: 'text',
@@ -377,7 +390,7 @@ export function handleChatResponse(requestId: string, userResponse: string, type
             };
             break;
     }
-    
+
     const pending = pendingRequests.get(requestId);
     if (pending) {
         pendingRequests.delete(requestId);

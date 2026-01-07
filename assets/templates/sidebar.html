@@ -4,263 +4,1483 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WindsurfAutoMcp</title>
+    <title>WindsurfAutoMcp: 对话控制</title>
     <style>
-        {
-                {
-                STYLES
-            }
-        }
+        /* CSS样式将在运行时通过{{STYLES}}占位符注入 */
+        {{STYLES}}
     </style>
 </head>
 
 <body>
-    <div class="app">
-        <!-- 开源与免费 -->
-        <div class="card">
-            <div class="section-title">开源与免费</div>
-            <p style="font-size: 12px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 12px;">
-                本插件完全免费。原项目：
-                <span
-                    style="color: var(--accent-hover); word-break: break-all;">https://github.com/JiXiangKing80/windsurf-auto-mcp</span><br>
-                当前项目：
-                <span
-                    style="color: var(--accent-hover); word-break: break-all;">https://github.com/xierui921326/windsurf-auto-mcp</span>
-            </p>
-            <div class="btn-group">
-                <button class="btn btn-primary" onclick="openRepo()">打开 GitHub</button>
-                <button class="btn btn-ghost" onclick="copyRepoUrl()">复制链接</button>
+    <div class="chat-app">
+        <!-- 头部标题 -->
+        <div class="chat-header">
+            <h1 class="chat-title">WindsurfAutoMcp</h1>
+            <p class="chat-subtitle">对话流程控制</p>
+        </div>
+
+        <!-- AI 暂停原因区域 -->
+        <div class="ai-reason-card">
+            <div class="ai-icon">🤖</div>
+            <div class="ai-content">
+                <div class="ai-title">AI 暂停原因</div>
+                <div class="ai-message">等待用户确认是否需要修改逻辑</div>
             </div>
         </div>
 
-        <!-- 服务器状态 -->
-        <div class="card">
-            <div class="section-title">服务器</div>
-
-            <div class="status-bar">
-                <div class="status-left">
-                    <span class="status-dot {{SERVER_STATUS_CLASS}}"></span>
-                    <span class="status-label {{SERVER_STATUS_CLASS}}">{{SERVER_STATUS_TEXT}}</span>
+        <!-- 设置区域 -->
+        <div class="settings-section">
+            <div class="settings-header" onclick="toggleSettings()">
+                <span>设置</span>
+                <span class="settings-arrow" id="settingsArrow">▶</span>
+            </div>
+            <div class="settings-content" id="settingsContent">
+                <!-- API 配置 -->
+                <div class="config-group">
+                    <div class="config-title">API 配置</div>
+                    <div class="config-item">
+                        <label>API Key</label>
+                        <input type="password" class="config-input" id="apiKey" placeholder="智谱 API 密钥（用于指令优化和上下文摘要）">
+                    </div>
+                    <div class="config-item">
+                        <label>模型选择</label>
+                        <select class="config-select" id="modelSelect">
+                            <option value="GLM-4.5-Flash">GLM-4.5-Flash（免费）</option>
+                            <option value="custom">自定义模型</option>
+                        </select>
+                    </div>
+                    <div class="config-item">
+                        <label class="config-checkbox">
+                            <input type="checkbox" id="enableAdditionalRules">
+                            <span class="checkmark"></span>
+                            启用追加规则
+                        </label>
+                    </div>
+                    <div class="config-item" id="additionalRulesContainer" style="display: none;">
+                        <textarea class="config-textarea" id="additionalRules" placeholder="每次发送时自动追加的内容" style="width: 100%; max-width: 100%; box-sizing: border-box;"></textarea>
+                    </div>
+                    <div class="config-item">
+                        <label class="config-checkbox">
+                            <input type="checkbox" id="enableContextSummary">
+                            <span class="checkmark"></span>
+                            启用上下文摘要（基于前3条历史记录）
+                        </label>
+                    </div>
+                    <div class="config-item">
+                        <label class="config-checkbox">
+                            <input type="checkbox" id="autoOptimize">
+                            <span class="checkmark"></span>
+                            开启后自动优化指令再发送
+                        </label>
+                    </div>
                 </div>
-                {{SERVER_PORT_DISPLAY}}
-            </div>
 
-            <div class="input-group">
-                <label class="input-label">端口</label>
-                <div class="input-row">
-                    <input type="number" class="input" id="portInput" value="{{CURRENT_PORT}}" min="1024" max="65535">
-                </div>
-            </div>
-
-            <div class="btn-group">
-                <button class="btn {{SERVER_BUTTON_CLASS}}" onclick="{{SERVER_BUTTON_ACTION}}">
-                    {{SERVER_BUTTON_TEXT}}
-                </button>
-                <button class="btn btn-ghost" onclick="restartServer()">重启</button>
-            </div>
-        </div>
-
-        <!-- 对话控制 -->
-        <div class="card">
-            <div class="section-title">对话</div>
-            <button class="btn btn-primary btn-full" onclick="openContinueDialog()">
-                打开对话窗口
-            </button>
-            <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; text-align: center;">
-                快捷键: <kbd
-                    style="background: var(--bg-elevated); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border);">Ctrl+M</kbd>
-            </p>
-        </div>
-
-        <!-- 提示语 -->
-        <div class="card">
-            <div class="section-title">提示语</div>
-            <div class="prompt-card">
-                <p class="prompt-text">
-                    当你完成一个任务时，必须调用 <code>WindsurfAutoMcp</code> 工具询问用户是否继续。
-                </p>
-            </div>
-            <button class="btn btn-ghost btn-full" onclick="copyPrompt()">
-                复制
-            </button>
-        </div>
-
-        <!-- 快捷操作 -->
-        <div class="card">
-            <div class="section-title">Windsurf 配置</div>
-            <div class="btn-group">
-                <button class="btn {{CONFIG_BUTTON_CLASS}}" onclick="configWindsurf()" id="initBtn">
-                    {{CONFIG_BUTTON_TEXT}}
-                </button>
-                <button class="btn btn-ghost" onclick="resetDefaults()">恢复默认端口</button>
-            </div>
-            <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
-                {{CONFIG_STATUS_TEXT}}
-            </p>
-        </div>
-
-        <!-- 统计 -->
-        <div class="card">
-            <div class="section-title">统计</div>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{{TOTAL_CALLS}}</div>
-                    <div class="stat-label">总调用</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{{ASK_CONTINUE_CALLS}}</div>
-                    <div class="stat-label">ask_continue</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 指令优化设置 -->
-        <div class="card">
-            <div class="section-title">指令优化设置</div>
-            <div class="status-bar">
-                <div class="status-left">
-                    <span class="status-dot {{OPTIMIZATION_STATUS_CLASS}}"></span>
-                    <span class="status-label {{OPTIMIZATION_STATUS_CLASS}}">{{OPTIMIZATION_STATUS_TEXT}}</span>
-                </div>
-                <span class="status-port">{{OPTIMIZATION_LEVEL}}</span>
-            </div>
-            <div class="input-group">
-                <label class="input-label">优化级别</label>
-                <div class="input-row">
-                    <select class="input" id="optimizationLevel" onchange="updateOptimizationLevel()">
-                        {{OPTIMIZATION_LEVEL_OPTIONS}}
-                    </select>
-                </div>
-            </div>
-            <div class="btn-group">
-                <button class="btn {{OPTIMIZATION_BUTTON_CLASS}}" onclick="toggleOptimization()">
-                    {{OPTIMIZATION_BUTTON_TEXT}}
-                </button>
-            </div>
-        </div>
-
-        <!-- 历史指令管理 -->
-        <div class="card">
-            <div class="section-title">历史指令</div>
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{{HISTORY_TOTAL}}</div>
-                    <div class="stat-label">总记录</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value">{{HISTORY_SUCCESS}}</div>
-                    <div class="stat-label">成功数</div>
-                </div>
-            </div>
-            <div class="btn-group">
-                <button class="btn btn-primary" onclick="viewHistory()">查看历史</button>
-                <button class="btn btn-ghost" onclick="clearHistory()">清空历史</button>
             </div>
         </div>
 
         <!-- 上下文摘要 -->
-        <div class="card">
-            <div class="section-title">项目上下文</div>
-            <div class="desc">
-                项目: {{PROJECT_NAME}}<br>
-                类型: {{PROJECT_TYPE}}<br>
-                技术: {{PROJECT_TECHNOLOGIES}}<br>
-                任务: {{CURRENT_TASK}}
+        <div class="context-summary" id="contextSummary" style="display: none;">
+            <div class="summary-header">
+                <span class="summary-title">
+                    <span class="summary-icon">📋</span>
+                    上下文摘要
+                </span>
+                <div class="summary-actions">
+                    <button class="summary-clear" onclick="clearSummary()" title="清除摘要">清除</button>
+                </div>
             </div>
-            <button class="btn btn-primary btn-full" onclick="showContextSummary()">查看详情</button>
+            <div class="summary-content" id="summaryContent">
+                <!-- 摘要内容将在有对话历史后动态生成 -->
+            </div>
         </div>
 
-        <!-- 规则文件 -->
-        <div class="card">
-            <div class="section-title">规则文件</div>
-            <div class="desc">自动创建 .windsurf/rules/rules.md 文件，包含增强功能的使用规则</div>
-            <button class="btn btn-primary btn-full" onclick="createRules()">创建/更新规则文件</button>
+        <!-- 输入区域 -->
+        <div class="input-section">
+            <!-- 附件预览区域 -->
+            <div class="attachments-preview" id="attachmentsPreview" style="display: none;">
+                <div class="attachments-header">
+                    <span>附件预览</span>
+                    <button class="clear-attachments" onclick="clearAttachments()">清除全部</button>
+                </div>
+                <div class="attachments-list" id="attachmentsList">
+                    <!-- 附件项将动态添加到这里 -->
+                </div>
+            </div>
+            
+            <div class="input-container">
+                <textarea class="chat-input" id="chatInput" placeholder="输入新指令..." rows="4"></textarea>
+            </div>
+            
+            <!-- 所有按钮放在输入框下方 -->
+            <div class="input-bottom-actions">
+                <div class="left-actions">
+                    <button class="action-btn" onclick="addFile()" title="添加图片/文件">
+                        📎
+                    </button>
+                    <button class="action-btn" onclick="optimizeCommand()" title="优化指令">
+                        ✨
+                    </button>
+                </div>
+                <div class="right-actions">
+                    <button class="control-btn end-btn" onclick="endConversation()">结束</button>
+                    <button class="control-btn continue-btn" onclick="continueConversation()" id="continueBtn">继续</button>
+                </div>
+            </div>
+            
+        </div>
+
+        <!-- 历史指令 -->
+        <div class="history-section">
+            <div class="history-header" onclick="toggleHistory()">
+                <span>历史指令</span>
+                <button class="history-clear" onclick="clearHistory()">清空</button>
+            </div>
+            <div class="history-list" id="historyList">
+                <!-- 历史记录将动态加载 -->
+            </div>
         </div>
     </div>
 
     <script>
         const vscode = acquireVsCodeApi();
 
-        function startServer() {
-            vscode.postMessage({ type: 'startServer' });
+        // 设置展开/收起
+        function toggleSettings() {
+            const content = document.getElementById('settingsContent');
+            const arrow = document.getElementById('settingsArrow');
+            const isOpen = content.style.display === 'block';
+            
+            content.style.display = isOpen ? 'none' : 'block';
+            arrow.textContent = isOpen ? '▶' : '▼';
         }
 
-        function stopServer() {
-            vscode.postMessage({ type: 'stopServer' });
+        // 追加规则开关控制
+        function toggleAdditionalRules() {
+            const checkbox = document.getElementById('enableAdditionalRules');
+            const container = document.getElementById('additionalRulesContainer');
+            
+            if (checkbox.checked) {
+                container.style.display = 'block';
+            } else {
+                container.style.display = 'none';
+                // 清空追加规则内容
+                document.getElementById('additionalRules').value = '';
+            }
+            saveState();
+            showSaveNotification('追加规则设置已保存');
         }
 
-        function restartServer() {
-            vscode.postMessage({ type: 'restartServer' });
+        // 上下文摘要开关控制
+        function toggleContextSummary() {
+            const checkbox = document.getElementById('enableContextSummary');
+            const contextSummary = document.getElementById('contextSummary');
+            
+            if (!checkbox.checked) {
+                // 如果关闭摘要，隐藏摘要区域
+                contextSummary.style.display = 'none';
+                // 清空摘要内容
+                const summaryContent = document.getElementById('summaryContent');
+                if (summaryContent) {
+                    summaryContent.textContent = '';
+                }
+            } else {
+                // 如果开启摘要，重新检查是否需要显示
+                checkSummaryDisplay();
+            }
+            saveState();
+            showSaveNotification('上下文摘要设置已保存');
         }
 
-        function configWindsurf() {
-            vscode.postMessage({ type: 'configWindsurf' });
+        // 显示保存成功通知
+        function showSaveNotification(message) {
+            // 发送消息给VSCode扩展显示通知
+            vscode.postMessage({
+                type: 'showNotification',
+                message: message,
+                level: 'info'
+            });
         }
 
-        function resetDefaults() {
-            vscode.postMessage({ type: 'resetDefaults' });
+        // 历史记录展开/收起
+        function toggleHistory() {
+            const historyList = document.getElementById('historyList');
+            const isOpen = historyList.style.display === 'block';
+            historyList.style.display = isOpen ? 'none' : 'block';
         }
 
-        function openContinueDialog() {
-            vscode.postMessage({ type: 'openContinueDialog' });
+        // 优化指令
+        function optimizeCommand() {
+            const input = document.getElementById('chatInput');
+            if (input.value.trim()) {
+                vscode.postMessage({ 
+                    type: 'optimizeCommand', 
+                    command: input.value 
+                });
+            }
         }
 
-        function copyPrompt() {
-            vscode.postMessage({ type: 'copyPrompt' });
+        // 存储附件数据
+        let attachments = [];
+
+        // 数据持久化相关
+        const STORAGE_KEY = 'windsurfAutoMcp_state';
+
+        // 保存状态到本地存储
+        function saveState() {
+            const chatInput = document.getElementById('chatInput');
+            const summaryContent = document.getElementById('summaryContent');
+            const enableAdditionalRules = document.getElementById('enableAdditionalRules');
+            const enableContextSummary = document.getElementById('enableContextSummary');
+            const autoOptimize = document.getElementById('autoOptimize');
+            const additionalRules = document.getElementById('additionalRules');
+            
+            const state = {
+                attachments: attachments || [],
+                conversationRounds: conversationRounds || 0,
+                conversationHistory: conversationHistory || [],
+                chatInput: chatInput?.value || '',
+                summaryContent: summaryContent?.textContent || '',
+                enableAdditionalRules: enableAdditionalRules?.checked || false,
+                enableContextSummary: enableContextSummary?.checked || false,
+                autoOptimize: autoOptimize?.checked || false,
+                additionalRules: additionalRules?.value || '',
+                timestamp: Date.now()
+            };
+            
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                console.log('状态已保存:', state);
+            } catch (error) {
+                console.warn('无法保存状态到本地存储:', error);
+            }
         }
 
-        function openRepo() {
-            vscode.postMessage({ type: 'openRepo' });
+        // 从本地存储恢复状态
+        function restoreState() {
+            try {
+                const savedState = localStorage.getItem(STORAGE_KEY);
+                if (savedState) {
+                    const state = JSON.parse(savedState);
+                    
+                    // 检查状态是否过期（24小时）
+                    const isExpired = Date.now() - state.timestamp > 24 * 60 * 60 * 1000;
+                    if (isExpired) {
+                        localStorage.removeItem(STORAGE_KEY);
+                        console.log('保存的状态已过期，已清除');
+                        return;
+                    }
+                    
+                    // 恢复附件
+                    if (state.attachments && Array.isArray(state.attachments)) {
+                        attachments = state.attachments;
+                        renderAttachments();
+                    }
+                    
+                    // 恢复对话轮次和历史
+                    if (typeof state.conversationRounds === 'number') {
+                        conversationRounds = state.conversationRounds;
+                        console.log('恢复对话轮次:', conversationRounds);
+                    }
+                    if (state.conversationHistory && Array.isArray(state.conversationHistory)) {
+                        conversationHistory = state.conversationHistory;
+                        console.log('恢复对话历史:', conversationHistory.length, '条记录');
+                    }
+                    
+                    // 恢复设置开关状态
+                    const enableAdditionalRules = document.getElementById('enableAdditionalRules');
+                    const enableContextSummary = document.getElementById('enableContextSummary');
+                    const autoOptimize = document.getElementById('autoOptimize');
+                    
+                    if (enableAdditionalRules && typeof state.enableAdditionalRules === 'boolean') {
+                        enableAdditionalRules.checked = state.enableAdditionalRules;
+                        toggleAdditionalRules();
+                    }
+                    if (enableContextSummary && typeof state.enableContextSummary === 'boolean') {
+                        enableContextSummary.checked = state.enableContextSummary;
+                    }
+                    if (autoOptimize && typeof state.autoOptimize === 'boolean') {
+                        autoOptimize.checked = state.autoOptimize;
+                    }
+                    
+                    // 恢复追加规则内容
+                    const additionalRules = document.getElementById('additionalRules');
+                    if (additionalRules && state.additionalRules) {
+                        additionalRules.value = state.additionalRules;
+                    }
+                    
+                    // 不恢复输入框内容，保持输入框为空
+                    // if (state.chatInput) {
+                    //     const chatInput = document.getElementById('chatInput');
+                    //     if (chatInput) {
+                    //         chatInput.value = state.chatInput;
+                    //     }
+                    // }
+                    
+                    // 不恢复摘要内容，摘要应该基于当前指令生成
+                    // 清空任何旧的摘要内容
+                    const summaryContent = document.getElementById('summaryContent');
+                    const contextSummary = document.getElementById('contextSummary');
+                    if (summaryContent) {
+                        summaryContent.textContent = '';
+                    }
+                    if (contextSummary) {
+                        contextSummary.style.display = 'none';
+                    }
+                    
+                    console.log('状态恢复完成:', state);
+                }
+            } catch (error) {
+                console.warn('无法从本地存储恢复状态:', error);
+                localStorage.removeItem(STORAGE_KEY);
+            }
         }
 
-        function copyRepoUrl() {
-            vscode.postMessage({ type: 'copyRepoUrl' });
+        // 清除保存的状态
+        function clearSavedState() {
+            try {
+                localStorage.removeItem(STORAGE_KEY);
+            } catch (error) {
+                console.warn('无法清除保存的状态:', error);
+            }
         }
 
-        function toggleOptimization() {
-            vscode.postMessage({ type: 'toggleOptimization' });
+        // 添加文件
+        function addFile() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.multiple = true;
+            input.accept = 'image/*,text/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.json,.js,.ts,.html,.css,.md';
+            
+            input.onchange = function(e) {
+                const files = Array.from(e.target.files);
+                handleFiles(files);
+            };
+            
+            input.click();
         }
 
-        function updateOptimizationLevel() {
-            const level = document.getElementById('optimizationLevel').value;
-            vscode.postMessage({ type: 'updateOptimizationLevel', level: level });
-        }
-
-        function viewHistory() {
-            vscode.postMessage({ type: 'viewHistory' });
-        }
-
-        function clearHistory() {
-            vscode.postMessage({ type: 'clearHistory' });
-        }
-
-        function showContextSummary() {
-            vscode.postMessage({ type: 'showContextSummary' });
-        }
-
-        function createRules() {
-            vscode.postMessage({ type: 'createRules' });
-        }
-
-        // 端口输入框变化时更新配置
-        const portInput = document.getElementById('portInput');
-        if (portInput) {
-            portInput.addEventListener('change', function () {
-                const port = parseInt(this.value, 10);
-                if (port >= 1024 && port <= 65535) {
-                    vscode.postMessage({ type: 'updatePort', port: port });
+        // 处理文件
+        function handleFiles(files) {
+            files.forEach(file => {
+                const reader = new FileReader();
+                
+                if (file.type.startsWith('image/')) {
+                    reader.onload = function(e) {
+                        const attachment = {
+                            id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                            name: file.name,
+                            type: file.type,
+                            size: file.size,
+                            data: e.target.result,
+                            mimeType: file.type
+                        };
+                        attachments.push(attachment);
+                        renderAttachments();
+                        saveState();
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    reader.onload = function(e) {
+                        const attachment = {
+                            id: Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                            name: file.name,
+                            type: 'file',
+                            size: file.size,
+                            data: e.target.result,
+                            mimeType: file.type
+                        };
+                        attachments.push(attachment);
+                        renderAttachments();
+                        saveState();
+                    };
+                    reader.readAsDataURL(file);
                 }
             });
         }
 
-        // 监听来自扩展的消息
+        // 添加附件到预览区域
+        function addAttachment(file) {
+            const attachmentId = Date.now() + Math.random();
+            const attachment = {
+                id: attachmentId,
+                name: file.name,
+                type: file.type,
+                size: file.size,
+                data: file.data || file.path
+            };
+            
+            attachments.push(attachment);
+            renderAttachments();
+            saveState(); // 立即保存状态
+        }
+
+        // 渲染附件列表
+        function renderAttachments() {
+            const attachmentsList = document.getElementById('attachmentsList');
+            const attachmentsPreview = document.getElementById('attachmentsPreview');
+            
+            if (attachments.length === 0) {
+                attachmentsPreview.style.display = 'none';
+                return;
+            }
+            
+            attachmentsPreview.style.display = 'block';
+            attachmentsList.innerHTML = '';
+            
+            attachments.forEach(attachment => {
+                const attachmentItem = document.createElement('div');
+                attachmentItem.className = 'attachment-item';
+                attachmentItem.innerHTML = `
+                    <div class="attachment-preview">
+                        ${getAttachmentPreview(attachment)}
+                    </div>
+                    <div class="attachment-info">
+                        <div class="attachment-name">${attachment.name}</div>
+                        <div class="attachment-size">${formatFileSize(attachment.size)}</div>
+                    </div>
+                    <button class="attachment-remove" onclick="removeAttachment('${attachment.id}')" title="移除">
+                        ×
+                    </button>
+                `;
+                attachmentsList.appendChild(attachmentItem);
+            });
+        }
+
+        // 获取附件预览内容
+        function getAttachmentPreview(attachment) {
+            if (attachment.type && attachment.type.startsWith('image/')) {
+                return `<img src="${attachment.data}" alt="${attachment.name}" class="attachment-thumbnail" onclick="viewFullImage('${attachment.data}', '${attachment.name}')" style="cursor: pointer;" title="点击查看原图">`;
+            } else {
+                // 根据文件扩展名显示不同图标
+                const ext = attachment.name.split('.').pop().toLowerCase();
+                const icon = getFileIcon(ext);
+                return `<div class="file-icon">${icon}</div>`;
+            }
+        }
+
+        // 查看原图功能
+        function viewFullImage(imageSrc, imageName) {
+            // 创建模态框
+            const modal = document.createElement('div');
+            modal.className = 'image-modal';
+            modal.id = 'imageModal';
+            modal.innerHTML = `
+                <div class="image-modal-content">
+                    <div class="image-modal-header">
+                        <span class="image-modal-title">${imageName}</span>
+                        <button class="image-modal-close" onclick="closeImageModal()">&times;</button>
+                    </div>
+                    <div class="image-modal-body">
+                        <img src="${imageSrc}" alt="${imageName}" class="image-modal-img">
+                    </div>
+                </div>
+                <div class="image-modal-backdrop" onclick="closeImageModal()"></div>
+            `;
+            
+            document.body.appendChild(modal);
+        }
+
+        // 关闭图片模态框
+        function closeImageModal() {
+            const modal = document.getElementById('imageModal');
+            if (modal) {
+                modal.remove();
+            }
+        }
+
+        // 获取文件图标
+        function getFileIcon(ext) {
+            const icons = {
+                'pdf': '📄',
+                'doc': '📝', 'docx': '📝',
+                'xls': '📊', 'xlsx': '📊',
+                'ppt': '📈', 'pptx': '📈',
+                'txt': '📄',
+                'js': '📜', 'ts': '📜',
+                'html': '🌐', 'css': '🎨',
+                'json': '📋',
+                'zip': '📦', 'rar': '📦',
+                'mp4': '🎥', 'avi': '🎥',
+                'mp3': '🎵', 'wav': '🎵'
+            };
+            return icons[ext] || '📎';
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        // 移除附件
+        function removeAttachment(attachmentId) {
+            attachments = attachments.filter(att => att.id !== attachmentId);
+            renderAttachments();
+            saveState(); // 立即保存状态
+        }
+
+        // 清除所有附件
+        function clearAttachments() {
+            attachments = [];
+            renderAttachments();
+            saveState(); // 立即保存状态
+        }
+
+        // 结束对话
+        function endConversation() {
+            vscode.postMessage({ type: 'endConversation' });
+        }
+
+        // 继续对话
+        function continueConversation() {
+            const input = document.getElementById('chatInput');
+            let command = input.value.trim();
+            const continueBtn = document.getElementById('continueBtn');
+            
+            if (command || attachments.length > 0) {
+                // 保存原始指令用于历史记录
+                const originalCommand = input.value.trim();
+                
+                // 增加对话轮次
+                conversationRounds++;
+                
+                // 添加到对话历史（只保存原始指令）
+                if (originalCommand) {
+                    addToConversationHistory(originalCommand, 'user');
+                    // 同时保存到本地存储以便持久化
+                    saveCommandToHistory(originalCommand, 'user');
+                    // 基于当前指令生成上下文摘要
+                    generateContextSummary(originalCommand);
+                }
+                
+                // 立即清空输入框
+                input.value = '';
+                clearAttachments();
+                
+                // 切换到处理中状态
+                continueBtn.textContent = '处理中';
+                continueBtn.disabled = true;
+                continueBtn.classList.add('processing');
+                
+                vscode.postMessage({ 
+                    type: 'continueConversation', 
+                    command: originalCommand,
+                    attachments: attachments,
+                    conversationRounds: conversationRounds
+                });
+                
+                // 保存状态
+                saveState();
+                
+                // 检查是否需要显示摘要
+                checkSummaryDisplay();
+            }
+        }
+
+        // 重置继续按钮状态
+        function resetContinueButton() {
+            const continueBtn = document.getElementById('continueBtn');
+            continueBtn.textContent = '继续';
+            continueBtn.disabled = false;
+            continueBtn.classList.remove('processing');
+        }
+
+        // 对话轮次计数器
+        let conversationRounds = 0;
+        let conversationHistory = [];
+
+        // 清除摘要
+        function clearSummary() {
+            const summaryContent = document.getElementById('summaryContent');
+            const contextSummary = document.getElementById('contextSummary');
+            
+            if (summaryContent) {
+                summaryContent.textContent = '';
+            }
+            if (contextSummary) {
+                contextSummary.style.display = 'none';
+            }
+            
+            // 保存清除状态
+            saveState();
+        }
+
+        // 检查是否需要显示摘要
+        function checkSummaryDisplay() {
+            const contextSummary = document.getElementById('contextSummary');
+            const summaryContent = document.getElementById('summaryContent');
+            const enableContextSummary = document.getElementById('enableContextSummary');
+            
+            // 只有在开启摘要开关且有足够历史记录时才显示
+            if (enableContextSummary && enableContextSummary.checked &&
+                conversationHistory && conversationHistory.length >= 3 && 
+                summaryContent && summaryContent.textContent.trim()) {
+                contextSummary.style.display = 'block';
+            } else {
+                // 默认隐藏摘要
+                contextSummary.style.display = 'none';
+            }
+        }
+
+        // 基于前3条历史记录生成上下文摘要
+        function generateContextSummary(command) {
+            const enableContextSummary = document.getElementById('enableContextSummary');
+            
+            // 检查是否启用摘要功能
+            if (!enableContextSummary || !enableContextSummary.checked) {
+                return;
+            }
+
+            if (!command || !command.trim()) {
+                return;
+            }
+
+            const summaryContent = document.getElementById('summaryContent');
+            const contextSummary = document.getElementById('contextSummary');
+            
+            if (!summaryContent || !contextSummary) {
+                return;
+            }
+
+            // 获取最近的3条历史记录
+            let recentHistory = [];
+            if (conversationHistory && conversationHistory.length > 0) {
+                recentHistory = conversationHistory.slice(-3);
+            }
+
+            // 生成基于历史记录的摘要
+            let summary = '';
+            if (recentHistory.length >= 3) {
+                const historyText = recentHistory.map(h => h.content.substring(0, 30)).join(' → ');
+                summary = `历史任务: ${historyText}`;
+            }
+
+            // 添加当前任务
+            const cmd = command.toLowerCase().trim();
+            let currentTask = '';
+            if (cmd.includes('分析') || cmd.includes('analyze')) {
+                currentTask = `正在分析：${command.length > 50 ? command.substring(0, 50) + '...' : command}`;
+            } else if (cmd.includes('修改') || cmd.includes('修复') || cmd.includes('fix')) {
+                currentTask = `正在修改：${command.length > 50 ? command.substring(0, 50) + '...' : command}`;
+            } else if (cmd.includes('创建') || cmd.includes('新建') || cmd.includes('create')) {
+                currentTask = `正在创建：${command.length > 50 ? command.substring(0, 50) + '...' : command}`;
+            } else if (cmd.includes('删除') || cmd.includes('移除') || cmd.includes('delete')) {
+                currentTask = `正在删除：${command.length > 50 ? command.substring(0, 50) + '...' : command}`;
+            } else if (cmd.includes('优化') || cmd.includes('改进') || cmd.includes('optimize')) {
+                currentTask = `正在优化：${command.length > 50 ? command.substring(0, 50) + '...' : command}`;
+            } else {
+                currentTask = `当前任务：${command.length > 50 ? command.substring(0, 50) + '...' : command}`;
+            }
+
+            if (summary) {
+                summary += `\n${currentTask}`;
+            } else {
+                summary = currentTask;
+            }
+            
+            // 设置摘要内容并显示
+            summaryContent.textContent = summary;
+            checkSummaryDisplay();
+        }
+
+        // 添加对话到历史记录
+        function addToConversationHistory(message, type = 'user') {
+            const now = Date.now();
+            const last = conversationHistory.length > 0 ? conversationHistory[conversationHistory.length - 1] : null;
+            if (last && last.content === message && (now - last.timestamp) < 5000) {
+                if (type === 'cascade' && last.type !== 'cascade') {
+                    last.type = 'cascade';
+                }
+                return;
+            }
+
+            conversationHistory.push({
+                type: type,
+                content: message,
+                timestamp: now
+            });
+            
+            // 保持最近50条对话历史
+            if (conversationHistory.length > 50) {
+                conversationHistory = conversationHistory.slice(-50);
+            }
+            
+            // 立即更新历史记录显示
+            loadHistoryData();
+        }
+
+        // 重置继续按钮状态（由外部调用）
+        function resetContinueButtonFromMessage() {
+            resetContinueButton();
+        }
+
+        // 处理对话开始事件
+        function handleConversationStarted() {
+            const continueBtn = document.getElementById('continueBtn');
+            if (continueBtn) {
+                continueBtn.textContent = '发送中';
+                continueBtn.disabled = true;
+                continueBtn.classList.add('processing');
+            }
+        }
+        
+        // 处理指令已发送事件
+        function handleConversationSent(message) {
+            const continueBtn = document.getElementById('continueBtn');
+            if (continueBtn) {
+                continueBtn.textContent = 'Cascade处理中';
+                continueBtn.disabled = true;
+                continueBtn.classList.add('processing');
+            }
+            
+            // 显示状态提示
+            showStatusMessage('指令已发送，等待Cascade处理...', 'info');
+        }
+        
+        // 处理对话错误事件
+        function handleConversationError(message) {
+            const continueBtn = document.getElementById('continueBtn');
+            if (continueBtn) {
+                continueBtn.textContent = '继续';
+                continueBtn.disabled = false;
+                continueBtn.classList.remove('processing');
+            }
+            
+            // 显示错误提示
+            showStatusMessage(message.error || '发送失败，请重试', 'error');
+        }
+        
+        // 处理Cascade处理中事件
+        function handleCascadeProcessing() {
+            const continueBtn = document.getElementById('continueBtn');
+            if (continueBtn) {
+                continueBtn.textContent = 'Cascade处理中';
+                continueBtn.disabled = true;
+                continueBtn.classList.add('processing');
+            }
+        }
+        
+        // 处理Cascade处理完成事件
+        function handleCascadeComplete() {
+            const continueBtn = document.getElementById('continueBtn');
+            if (continueBtn) {
+                continueBtn.textContent = '继续';
+                continueBtn.disabled = false;
+                continueBtn.classList.remove('processing');
+            }
+            
+            // 显示完成提示
+            showStatusMessage('Cascade处理完成，可以继续输入新指令', 'success');
+        }
+        
+        // 显示状态消息
+        function showStatusMessage(message, type = 'info') {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status-message status-${type}`;
+            statusDiv.textContent = message;
+            
+            const colors = {
+                info: '#2196F3',
+                success: '#4CAF50',
+                error: '#f44336',
+                warning: '#ff9800'
+            };
+            
+            statusDiv.style.cssText = `
+                background: ${colors[type] || colors.info};
+                color: white;
+                padding: 8px 12px;
+                border-radius: 4px;
+                margin: 8px 0;
+                font-size: 12px;
+                text-align: center;
+                animation: slideIn 0.3s ease-out;
+            `;
+            
+            const inputSection = document.querySelector('.input-section');
+            inputSection.insertBefore(statusDiv, inputSection.firstChild);
+            
+            // 3秒后移除提示
+            setTimeout(() => {
+                if (statusDiv.parentNode) {
+                    statusDiv.parentNode.removeChild(statusDiv);
+                }
+            }, 3000);
+        }
+
+        // 历史记录展开/收起
+        function toggleHistory() {
+            const historyList = document.getElementById('historyList');
+            const isOpen = historyList.style.display === 'block';
+            historyList.style.display = isOpen ? 'none' : 'block';
+            
+            // 如果打开历史记录，加载实际数据
+            if (!isOpen) {
+                loadHistoryData();
+            }
+        }
+        
+        // 加载历史记录数据
+        function loadHistoryData() {
+            const historyList = document.getElementById('historyList');
+            if (!historyList) return;
+            
+            // 清空现有内容
+            historyList.innerHTML = '';
+            
+            // 显示对话历史
+            if (conversationHistory && conversationHistory.length > 0) {
+                // 按时间倒序显示最近的记录
+                const recentHistory = conversationHistory.slice().reverse();
+                
+                recentHistory.forEach((item, index) => {
+                    const historyItem = document.createElement('div');
+                    historyItem.className = 'history-command-item';
+                    
+                    const timeStr = new Date(item.timestamp).toLocaleString('zh-CN', {
+                        year: 'numeric',
+                        month: '2-digit',
+                        day: '2-digit',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit'
+                    });
+                    
+                    // 截断过长的指令内容用于显示
+                    const displayContent = item.content.length > 80 ? item.content.substring(0, 80) + '...' : item.content;
+                    
+                    // 创建历史项元素
+                    const commandLine = document.createElement('div');
+                    commandLine.className = 'command-single-line';
+                    commandLine.title = item.content; // 完整内容作为tooltip
+                    
+                    // 使用事件监听器而不是onclick属性，避免字符转义问题
+                    commandLine.addEventListener('click', function(event) {
+                        console.log('历史指令被点击:', {
+                            content: item.content,
+                            displayContent: displayContent,
+                            timestamp: item.timestamp,
+                            event: event
+                        });
+                        
+                        // 阻止事件冒泡
+                        event.stopPropagation();
+                        
+                        putCommandToInput(item.content);
+                    });
+                    
+                    commandLine.innerHTML = `
+                        <div class="command-content">${displayContent}</div>
+                        <div class="command-time">${timeStr}</div>
+                    `;
+                    
+                    historyItem.appendChild(commandLine);
+                    
+                    historyList.appendChild(historyItem);
+                });
+            } else {
+                const emptyItem = document.createElement('div');
+                emptyItem.className = 'history-empty';
+                emptyItem.innerHTML = `
+                    <div class="empty-text">暂无历史指令</div>
+                    <div class="empty-hint">开始一次对话后，指令将显示在这里</div>
+                `;
+                historyList.appendChild(emptyItem);
+            }
+        }
+
+        
+        // 将指令放入输入框
+        function putCommandToInput(command) {
+            console.log('putCommandToInput 被调用，指令内容:', command);
+            
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                // 清空现有内容
+                chatInput.value = '';
+                
+                // 设置新内容
+                chatInput.value = command;
+                
+                // 聚焦到输入框
+                chatInput.focus();
+                
+                // 将光标移到末尾
+                chatInput.setSelectionRange(command.length, command.length);
+                
+                console.log('指令已成功放入输入框:', chatInput.value);
+            } else {
+                console.error('找不到chatInput元素');
+            }
+        }
+
+        // 重放指令（保留兼容性）
+        function replayCommand(command) {
+            putCommandToInput(command);
+        }
+        
+        
+
+
+        // 清空历史
+        function clearHistory() {
+            if (confirm('确定要清空所有历史记录吗？此操作不可恢复。')) {
+                conversationHistory = [];
+                conversationRounds = 0;
+                
+                // 清空本地存储中的历史记录
+                try {
+                    localStorage.removeItem('windsurfAutoMcp_commandHistory');
+                } catch (error) {
+                    console.warn('清空本地历史记录失败:', error);
+                }
+                
+                saveState();
+                loadHistoryData();
+                showStatusMessage('历史记录已清空', 'success');
+            }
+        }
+        
+        // 保存指令到历史记录
+        function saveCommandToHistory(command, type = 'user') {
+            try {
+                const historyKey = 'windsurfAutoMcp_commandHistory';
+                let commandHistory = [];
+                
+                const saved = localStorage.getItem(historyKey);
+                if (saved) {
+                    commandHistory = JSON.parse(saved);
+                }
+                
+                const historyItem = {
+                    command: command,
+                    type: type,
+                    timestamp: Date.now(),
+                    success: true
+                };
+
+                const last = commandHistory.length > 0 ? commandHistory[commandHistory.length - 1] : null;
+                if (last && last.command === command && (historyItem.timestamp - last.timestamp) < 5000) {
+                    if (type === 'cascade' && last.type !== 'cascade') {
+                        last.type = 'cascade';
+                    }
+                    localStorage.setItem(historyKey, JSON.stringify(commandHistory));
+                    return;
+                }
+
+                commandHistory.push(historyItem);
+                
+                // 保持最近100条记录
+                if (commandHistory.length > 100) {
+                    commandHistory = commandHistory.slice(-100);
+                }
+                
+                localStorage.setItem(historyKey, JSON.stringify(commandHistory));
+            } catch (error) {
+                console.warn('保存指令历史失败:', error);
+            }
+        }
+        
+        // 加载持久化的指令历史
+        function loadPersistedHistory() {
+            try {
+                const historyKey = 'windsurfAutoMcp_commandHistory';
+                const saved = localStorage.getItem(historyKey);
+                if (saved) {
+                    const commandHistory = JSON.parse(saved);
+                    // 将持久化的历史合并到当前对话历史中
+                    commandHistory.forEach(item => {
+                        if (!conversationHistory.find(h => h.timestamp === item.timestamp)) {
+                            conversationHistory.push({
+                                type: item.type,
+                                content: item.command,
+                                timestamp: item.timestamp
+                            });
+                        }
+                    });
+                    
+                    // 按时间排序
+                    conversationHistory.sort((a, b) => a.timestamp - b.timestamp);
+                    
+                    // 保持最近100条
+                    if (conversationHistory.length > 100) {
+                        conversationHistory = conversationHistory.slice(-100);
+                    }
+                }
+            } catch (error) {
+                console.warn('加载持久化历史失败:', error);
+            }
+        }
+
+        // 移除了键盘快捷键功能，回车键现在只用于换行
+        // 只有点击继续按钮才会发送指令
+
+        // 保存配置
+        function saveConfig() {
+            const config = {
+                apiKey: document.getElementById('apiKey').value,
+                model: document.getElementById('modelSelect').value,
+                additionalRules: document.getElementById('additionalRules').value,
+                autoOptimize: document.getElementById('autoOptimize').checked
+            };
+            
+            vscode.postMessage({ 
+                type: 'saveConfig', 
+                config: config 
+            });
+        }
+
+        // 监听来自VSCode的消息
         window.addEventListener('message', event => {
             const message = event.data;
             switch (message.type) {
-                case 'showUserRequest':
-                    // 处理用户请求对话框
-                    console.log('User request received:', message);
+                case 'fileSelected':
+                    if (message.file) {
+                        addAttachment(message.file);
+                    }
                     break;
+                case 'summaryGenerated':
+                    if (message.summary) {
+                        const summaryContent = document.getElementById('summaryContent');
+                        const generateBtn = document.querySelector('.summary-generate');
+                        
+                        summaryContent.textContent = message.summary;
+                        generateBtn.textContent = '🔄';
+                        generateBtn.disabled = false;
+                        
+                        // 确保摘要区域显示
+                        document.getElementById('contextSummary').style.display = 'block';
+                        
+                        // 保存摘要内容
+                        saveState();
+                    }
+                    break;
+                case 'summaryError':
+                    if (message.error) {
+                        const summaryContent = document.getElementById('summaryContent');
+                        const generateBtn = document.querySelector('.summary-generate');
+                        
+                        summaryContent.textContent = message.error;
+                        generateBtn.textContent = '🔄';
+                        generateBtn.disabled = false;
+                    }
+                    break;
+                case 'optimizeStatus':
+                    handleOptimizeStatus(message);
+                    break;
+                case 'optimizeResult':
+                    handleOptimizeResult(message);
+                    break;
+                case 'conversationStarted':
+                    // Cascade开始处理，设置按钮为处理中状态
+                    handleConversationStarted();
+                    break;
+                case 'conversationSent':
+                    // 指令已发送，等待Cascade处理
+                    handleConversationSent(message);
+                    break;
+                case 'conversationError':
+                    // 发送失败，恢复按钮状态
+                    handleConversationError(message);
+                    break;
+                case 'cascadeProcessing':
+                    // Cascade正在处理
+                    handleCascadeProcessing();
+                    break;
+                case 'cascadeProcessingComplete':
+                    // Cascade处理完成
+                    handleCascadeComplete();
+                    break;
+                case 'resetButtonState':
+                    // 重置按钮状态
+                    resetContinueButtonFromMessage();
+                    break;
+                case 'addCommandToHistory':
+                    // 添加Cascade指令到历史记录
+                    if (message.command && message.command.trim()) {
+                        console.log('收到Cascade指令记录请求:', message.command);
+                        addToConversationHistory(message.command.trim(), message.source || 'cascade');
+                        saveCommandToHistory(message.command.trim(), message.source || 'cascade');
+                        loadHistoryData(); // 立即刷新历史记录显示
+                        console.log('Cascade指令已记录到历史并刷新显示:', message.command);
+                    }
+                    break;
+            }
+        });
+
+        // 处理优化状态
+        function handleOptimizeStatus(message) {
+            const optimizeBtn = document.querySelector('.action-btn[onclick="optimizeCommand()"]');
+            if (message.status === 'optimizing') {
+                optimizeBtn.textContent = '⏳';
+                optimizeBtn.disabled = true;
+                optimizeBtn.title = message.message;
+            } else if (message.status === 'error') {
+                optimizeBtn.textContent = '✨';
+                optimizeBtn.disabled = false;
+                optimizeBtn.title = '优化指令';
+                // 可以显示错误提示
+            }
+        }
+
+        // 处理优化结果
+        function handleOptimizeResult(message) {
+            const optimizeBtn = document.querySelector('.action-btn[onclick="optimizeCommand()"]');
+            const chatInput = document.getElementById('chatInput');
+            
+            // 恢复按钮状态
+            optimizeBtn.textContent = '✨';
+            optimizeBtn.disabled = false;
+            optimizeBtn.title = '优化指令';
+            
+            // 将优化后的指令填入输入框
+            if (message.optimized && chatInput) {
+                chatInput.value = message.optimized;
+                chatInput.focus();
+                
+                // 显示优化提示
+                showOptimizeNotification(message.original, message.optimized);
+            }
+        }
+
+        // 显示优化提示
+        function showOptimizeNotification(original, optimized) {
+            // 创建优化提示框
+            const notification = document.createElement('div');
+            notification.className = 'optimize-notification';
+            notification.innerHTML = `
+                <div class="optimize-notification-content">
+                    <div class="optimize-notification-header">
+                        <span>✨ 指令已优化</span>
+                        <button class="optimize-notification-close" onclick="closeOptimizeNotification()">&times;</button>
+                    </div>
+                    <div class="optimize-notification-body">
+                        <div class="optimize-comparison">
+                            <div class="optimize-original">
+                                <strong>原始指令：</strong>
+                                <div class="optimize-text">${original}</div>
+                            </div>
+                            <div class="optimize-optimized">
+                                <strong>优化后：</strong>
+                                <div class="optimize-text">${optimized}</div>
+                            </div>
+                        </div>
+                        <div class="optimize-actions">
+                            <button class="optimize-accept" onclick="acceptOptimization()">使用优化版本</button>
+                            <button class="optimize-revert" onclick="revertOptimization('${original}')">恢复原版本</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 添加样式
+            if (!document.getElementById('optimizeNotificationStyles')) {
+                const style = document.createElement('style');
+                style.id = 'optimizeNotificationStyles';
+                style.textContent = `
+                    .optimize-notification {
+                        position: fixed;
+                        top: 20px;
+                        right: 20px;
+                        z-index: 9999;
+                        background: var(--vscode-notifications-background);
+                        border: 1px solid var(--vscode-notifications-border);
+                        border-radius: 6px;
+                        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+                        max-width: 400px;
+                        animation: slideIn 0.3s ease-out;
+                    }
+                    
+                    @keyframes slideIn {
+                        from { transform: translateX(100%); opacity: 0; }
+                        to { transform: translateX(0); opacity: 1; }
+                    }
+                    
+                    .optimize-notification-header {
+                        display: flex;
+                        justify-content: space-between;
+                        align-items: center;
+                        padding: 12px 16px;
+                        background: var(--vscode-notifications-foreground);
+                        color: var(--vscode-notifications-background);
+                        border-radius: 6px 6px 0 0;
+                        font-weight: 500;
+                    }
+                    
+                    .optimize-notification-close {
+                        background: none;
+                        border: none;
+                        color: inherit;
+                        font-size: 18px;
+                        cursor: pointer;
+                        padding: 0;
+                        width: 20px;
+                        height: 20px;
+                    }
+                    
+                    .optimize-notification-body {
+                        padding: 16px;
+                    }
+                    
+                    .optimize-comparison {
+                        margin-bottom: 16px;
+                    }
+                    
+                    .optimize-original, .optimize-optimized {
+                        margin-bottom: 12px;
+                    }
+                    
+                    .optimize-text {
+                        background: var(--vscode-input-background);
+                        border: 1px solid var(--vscode-input-border);
+                        border-radius: 4px;
+                        padding: 8px;
+                        margin-top: 4px;
+                        font-size: 12px;
+                        color: var(--vscode-input-foreground);
+                        max-height: 60px;
+                        overflow-y: auto;
+                    }
+                    
+                    .optimize-actions {
+                        display: flex;
+                        gap: 8px;
+                    }
+                    
+                    .optimize-accept, .optimize-revert {
+                        flex: 1;
+                        padding: 6px 12px;
+                        border: none;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        font-size: 12px;
+                        transition: background-color 0.2s;
+                    }
+                    
+                    .optimize-accept {
+                        background: var(--vscode-button-background);
+                        color: var(--vscode-button-foreground);
+                    }
+                    
+                    .optimize-accept:hover {
+                        background: var(--vscode-button-hoverBackground);
+                    }
+                    
+                    .optimize-revert {
+                        background: var(--vscode-button-secondaryBackground);
+                        color: var(--vscode-button-secondaryForeground);
+                    }
+                    
+                    .optimize-revert:hover {
+                        background: var(--vscode-button-secondaryHoverBackground);
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            // 5秒后自动关闭
+            setTimeout(() => {
+                closeOptimizeNotification();
+            }, 5000);
+        }
+
+        // 关闭优化提示
+        function closeOptimizeNotification() {
+            const notification = document.querySelector('.optimize-notification');
+            if (notification) {
+                notification.remove();
+            }
+        }
+
+        // 接受优化
+        function acceptOptimization() {
+            closeOptimizeNotification();
+        }
+
+        // 恢复原版本
+        function revertOptimization(original) {
+            const chatInput = document.getElementById('chatInput');
+            if (chatInput) {
+                chatInput.value = original;
+                chatInput.focus();
+            }
+            closeOptimizeNotification();
+        }
+
+        // 监听配置变化
+        ['apiKey', 'modelSelect', 'additionalRules', 'autoOptimize'].forEach(id => {
+            const element = document.getElementById(id);
+            if (element) {
+                if (id === 'apiKey') {
+                    // API Key 使用实时保存
+                    element.addEventListener('input', debounce(saveConfig, 1000));
+                    element.addEventListener('blur', saveConfig);
+                } else {
+                    element.addEventListener('change', saveConfig);
+                }
+            }
+        });
+
+        // 防抖函数，避免频繁保存
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // 设置拖拽功能
+        function setupDragAndDrop() {
+            const chatApp = document.querySelector('.chat-app');
+            const chatInput = document.getElementById('chatInput');
+            
+            // 防止默认拖拽行为
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                chatApp.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            // 高亮拖拽区域
+            ['dragenter', 'dragover'].forEach(eventName => {
+                chatApp.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                chatApp.addEventListener(eventName, unhighlight, false);
+            });
+            
+            // 处理文件拖拽
+            chatApp.addEventListener('drop', handleDrop, false);
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            function highlight(e) {
+                chatApp.classList.add('drag-over');
+            }
+            
+            function unhighlight(e) {
+                chatApp.classList.remove('drag-over');
+            }
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = Array.from(dt.files);
+                
+                if (files.length > 0) {
+                    handleFiles(files);
+                }
+            }
+        }
+
+        // 设置粘贴功能
+        function setupPasteHandler() {
+            const chatInput = document.getElementById('chatInput');
+            
+            chatInput.addEventListener('paste', function(e) {
+                const items = Array.from(e.clipboardData.items);
+                const files = [];
+                
+                items.forEach(item => {
+                    if (item.kind === 'file') {
+                        const file = item.getAsFile();
+                        if (file) {
+                            files.push(file);
+                        }
+                    }
+                });
+                
+                if (files.length > 0) {
+                    e.preventDefault();
+                    handleFiles(files);
+                }
+            });
+        }
+
+        // DOM加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM加载完成，开始初始化...');
+            
+            // 恢复状态
+            restoreState();
+            
+            // 加载历史数据
+            loadHistoryData();
+            
+            // 显示历史列表
+            const historyList = document.getElementById('historyList');
+            if (historyList) {
+                historyList.style.display = 'block';
+            }
+            
+            // 检查摘要显示
+            checkSummaryDisplay();
+            
+            // 添加拖拽和粘贴事件监听器
+            setupDragAndDrop();
+            setupPasteHandler();
+            
+            // 添加设置开关事件监听器
+            const enableAdditionalRules = document.getElementById('enableAdditionalRules');
+            const enableContextSummary = document.getElementById('enableContextSummary');
+            const autoOptimize = document.getElementById('autoOptimize');
+            const additionalRules = document.getElementById('additionalRules');
+            
+            if (enableAdditionalRules) {
+                enableAdditionalRules.addEventListener('change', toggleAdditionalRules);
+            }
+            if (enableContextSummary) {
+                enableContextSummary.addEventListener('change', toggleContextSummary);
+            }
+            if (autoOptimize) {
+                autoOptimize.addEventListener('change', saveState);
+            }
+            
+            // 为追加规则添加实时保存
+            if (additionalRules) {
+                additionalRules.addEventListener('input', debounce(saveState, 500));
+                additionalRules.addEventListener('blur', saveState);
+            }
+            
+            // 定期自动保存（每30秒）
+            setInterval(saveState, 30000);
+            
+            console.log('初始化完成');
+        });
+
+        // 页面卸载时保存状态
+        window.addEventListener('beforeunload', function() {
+            saveState();
+        });
+
+        // 页面隐藏时保存状态（用于处理标签页切换）
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                saveState();
+            }
+        });
+        
+        // 窗口失去焦点时保存状态
+        window.addEventListener('blur', function() {
+            saveState();
+        });
+        
+        // 监听VSCode扩展重启事件
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'extensionRestarting') {
+                saveState();
             }
         });
     </script>

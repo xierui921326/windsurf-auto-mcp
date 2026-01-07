@@ -279,24 +279,76 @@ export async function configureWindsurf() {
             };
 
             fs.writeFileSync(defaultConfigPath, JSON.stringify(defaultConfig, null, 2), 'utf-8');
+            outputChannel.appendLine(`已创建默认配置文件: ${defaultConfigPath}`);
+        }
 
-            vscode.window.showInformationMessage(
-                `已创建默认 Windsurf 配置 (HTTP模式)！\n服务器地址: ${httpServerUrl}\n配置文件: ${defaultConfigPath}\n请重启 Windsurf 以生效。`
-            );
-
-            outputChannel.appendLine(`已创建默认配置文件 (HTTP模式): ${defaultConfigPath}`);
+        if (updatedPaths.length > 0) {
+            outputChannel.appendLine(`已更新 ${updatedPaths.length} 个配置文件`);
+            outputChannel.appendLine('MCP配置已更新，将自动通知Windsurf刷新');
+        } else if (configFound) {
+            outputChannel.appendLine('所有配置文件都已是最新状态');
         } else {
-            outputChannel.appendLine('所有配置文件已是最新状态');
+            outputChannel.appendLine('未找到 Windsurf 配置目录，请确保 Windsurf 已正确安装');
         }
 
     } catch (error) {
-        const errorMsg = `配置 Windsurf 失败: ${error}`;
-        outputChannel.appendLine(errorMsg);
-        vscode.window.showErrorMessage(errorMsg);
-        return false;
+        outputChannel.appendLine(`配置 Windsurf 时出错: ${error}`);
+        throw error;
     }
 }
 
+// 通知Windsurf刷新MCP配置
+export async function notifyWindsurfRefresh() {
+    try {
+        // 重要：绝对不要在这里调用 reloadWindow，否则会导致扩展激活 -> 重载窗口 -> 再次激活 的死循环。
+        // 这里仅通过“轻量触发 + 提示”的方式让 Windsurf 重新检测 mcp_config.json。
+
+        // 方法1: 更新配置文件 metadata 来触发 Windsurf 检测配置变化
+        const homeDir = os.homedir();
+        const configPaths = [
+            path.join(homeDir, '.codeium', 'windsurf', 'mcp_config.json'),
+            path.join(homeDir, '.codeium', 'windsurf-next', 'mcp_config.json'),
+        ];
+
+        for (const configPath of configPaths) {
+            if (fs.existsSync(configPath)) {
+                try {
+                    // 读取配置文件
+                    const content = fs.readFileSync(configPath, 'utf-8');
+                    const config = JSON.parse(content);
+                    
+                    // 添加一个刷新时间戳来触发Windsurf重新加载
+                    if (!config.metadata) {
+                        config.metadata = {};
+                    }
+                    config.metadata.lastRefresh = new Date().toISOString();
+                    config.metadata.refreshReason = 'WindsurfAutoMcp插件启动';
+                    
+                    // 写回文件
+                    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
+                    outputChannel.appendLine(`已更新配置文件时间戳: ${configPath}`);
+                } catch (error) {
+                    outputChannel.appendLine(`更新配置文件时间戳失败 ${configPath}: ${error}`);
+                }
+            }
+        }
+
+        // 方法2: 显示用户提示
+        const result = await vscode.window.showInformationMessage(
+            'WindsurfAutoMcp已启动！如果在MCP Marketplace中看不到"Enabled"状态，请点击刷新按钮。',
+            '知道了',
+            '打开MCP Marketplace'
+        );
+
+        if (result === '打开MCP Marketplace') {
+            // 尝试打开Windsurf的MCP设置页面
+            vscode.commands.executeCommand('workbench.action.openSettings', 'mcp');
+        }
+
+    } catch (error) {
+        outputChannel.appendLine(`通知Windsurf刷新失败: ${error}`);
+    }
+}
 
 // 重置默认设置
 export function resetDefaults() {

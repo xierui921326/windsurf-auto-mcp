@@ -1,36 +1,67 @@
 import * as vscode from 'vscode';
 
-// 全局变量
-export let optimizationSettings = {
-    enabled: true,
-    autoOptimize: false,
-    optimizationLevel: 'medium' as 'low' | 'medium' | 'high',
-    contextLength: 1000,
-    includeProjectInfo: true,
-    executionRules: '',
+// 全局变量 - 保持向后兼容
+export let optimizationSettings: any = {
     apiKey: '',
-    model: 'glm-4-flash',
-    optimizationRules: '你的思考过程...\n</thinking>\n[英文指令]\n[中文指令]\n\n请直接输出优化后的指令，不要解释。'
+    model: 'GLM-4.5-Flash',
+    autoAddRules: true,
+    autoSummary: true,
+    autoOptimize: false
 };
 
-export let commandHistory: Array<{
-    id: string;
-    command: string;
-    timestamp: number;
-    optimized?: string;
-    context?: string;
-    success: boolean;
-}> = [];
+// 待处理的指令队列 - 这是正确的MCP工作流程
+let pendingCommands: string[] = [];
+let currentPendingCommand: string | null = null;
 
-export let contextSummary = {
-    projectName: '',
-    projectType: '',
-    mainTechnologies: [] as string[],
-    currentTask: '',
-    lastUpdate: 0
-};
+// 获取统一配置的辅助函数
+function getUnifiedConfig() {
+    const config = vscode.workspace.getConfiguration('windsurfAutoMcp');
+    return {
+        apiKey: config.get('apiKey', '') || optimizationSettings.apiKey,
+        model: config.get('model', 'GLM-4.5-Flash') || optimizationSettings.model,
+        autoOptimize: config.get('autoOptimize', false) || optimizationSettings.autoOptimize,
+        additionalRules: config.get('additionalRules', '')
+    };
+}
+
+export let commandHistory: { text: string, timestamp: number }[] = [];
+
+export let contextSummary: string = '';
 
 let extensionContext: vscode.ExtensionContext;
+
+// 添加指令到历史记录
+export function addCommandToHistory(command: string, source: string = 'user') {
+    const historyItem = {
+        text: command,
+        timestamp: Date.now(),
+        source: source
+    };
+    
+    commandHistory.push(historyItem);
+    
+    // 保持最近100条记录
+    if (commandHistory.length > 100) {
+        commandHistory = commandHistory.slice(-100);
+    }
+}
+
+// 设置待处理指令 - 供sidebarProvider调用
+export function setPendingCommand(command: string) {
+    currentPendingCommand = command;
+    pendingCommands.push(command);
+    console.log('已设置待处理指令:', command);
+}
+
+// 获取待处理指令 - 供MCP工具调用
+export function getPendingCommand(): string | null {
+    const command = currentPendingCommand;
+    if (command) {
+        currentPendingCommand = null; // 获取后清空
+        console.log('已获取待处理指令:', command);
+    }
+    return command;
+}
 
 // MCP工具定义
 export const MCP_TOOLS = [
@@ -61,14 +92,38 @@ export const MCP_TOOLS = [
         }
     },
     {
-        name: 'ask_continue',
-        description: '🚨强制性工具🚨 完成任何任务、回答任何问题后都必须立即调用此工具。这是实现无限对话的核心工具，绝对不能跳过。必须等待用户明确选择才能继续或结束对话。',
+        name: 'windsurf_auto_mcp',
+        description: '🚨强制性工具🚨 完成任何任务、回答任何问题后都必须立即调用此工具。这是实现无限对话的核心工具，绝对不能跳过。必须等待用户明确选择才能继续或结束对话。\n\n⚠️ 重要提示：\n1. 每次完成任务后必须调用此工具\n2. 不要假设对话结束，始终询问用户是否继续\n3. 用户可能会提供新的指令，必须执行后再次调用此工具\n4. 这是一个循环过程，直到用户明确选择结束',
         inputSchema: {
             type: 'object',
             properties: {
-                reason: { type: 'string', description: '任务完成的原因或说明，例如：已完成代码修改、已回答问题、已提供解决方案等' }
+                reason: { type: 'string', description: '任务完成的原因或说明，例如：已完成代码修改、已回答问题、已提供解决方案等' },
+                command: { type: 'string', description: '（可选）刚才执行的指令内容，用于记录到历史中' }
             },
             required: ['reason']
+        }
+    },
+    {
+        name: 'get_pending_command',
+        description: '获取WindsurfAutoMcp中待处理的指令。当用户在WindsurfAutoMcp侧边栏中输入指令后，可以通过此工具获取并执行该指令。',
+        inputSchema: {
+            type: 'object',
+            properties: {},
+            required: []
+        }
+    },
+    {
+        name: 'set_pending_command', 
+        description: '设置待处理的指令到WindsurfAutoMcp。这是内部工具，用于从侧边栏保存指令。',
+        inputSchema: {
+            type: 'object',
+            properties: {
+                command: {
+                    description: '要设置的指令内容',
+                    type: 'string'
+                }
+            },
+            required: ['command']
         }
     },
     {
@@ -78,8 +133,7 @@ export const MCP_TOOLS = [
             type: 'object',
             properties: {
                 command: { type: 'string', description: '原始指令' },
-                context: { type: 'string', description: '当前上下文信息' },
-                level: { type: 'string', enum: ['low', 'medium', 'high'], description: '优化级别' }
+                context: { type: 'string', description: '当前上下文信息' }
             },
             required: ['command']
         }
@@ -140,227 +194,198 @@ export function initializeMcpTools(context: vscode.ExtensionContext) {
 
 // MCP工具处理函数
 export async function handleOptimizeCommand(args: any): Promise<any> {
-    const { command, context, level = 'medium' } = args;
-    
-    if (!optimizationSettings.enabled) {
-        return { content: [{ type: 'text', text: '指令优化功能已禁用' }] };
-    }
-    
+    const { command, context } = args;
+
     let optimizedCommand = command;
     let suggestions = [];
     let success = true;
+
+    // 获取统一配置
+    const config = getUnifiedConfig();
     
     // 如果启用了自动优化且配置了API Key，调用智谱AI
-    if (optimizationSettings.autoOptimize && optimizationSettings.apiKey) {
+    if (config.autoOptimize && config.apiKey) {
         try {
-            optimizedCommand = await callZhipuAI(command, context, level);
+            optimizedCommand = await callZhipuAI(command, context);
             suggestions.push('使用智谱AI进行了智能优化');
         } catch (error) {
             success = false;
-            suggestions.push(`AI优化失败: ${error}`);
+            suggestions.push(`AI优化失败: ${error} `);
             // 回退到基本优化逻辑
-            optimizedCommand = basicOptimization(command, context, level);
+            optimizedCommand = basicOptimization(command, context);
             suggestions.push('使用基本优化逻辑作为备选');
         }
     } else {
         // 使用基本优化逻辑
-        optimizedCommand = basicOptimization(command, context, level);
+        optimizedCommand = basicOptimization(command, context);
         suggestions.push('使用基本优化逻辑');
-        
-        if (!optimizationSettings.apiKey) {
+
+        const config = getUnifiedConfig();
+        if (!config.apiKey) {
             suggestions.push('提示：配置API Key可启用AI智能优化');
         }
     }
-    
-    // 保存到历史记录
-    const historyEntry = {
-        id: `opt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        command: command,
-        timestamp: Date.now(),
-        optimized: optimizedCommand,
-        context: context || '',
-        success: success
-    };
-    commandHistory.unshift(historyEntry);
-    
-    // 限制历史记录数量
-    if (commandHistory.length > 100) {
-        commandHistory = commandHistory.slice(0, 100);
-    }
-    
+
+    addCommandToHistory(command);
+
     saveOptimizationData();
-    
+
     return {
         content: [{
             type: 'text',
-            text: `指令优化完成：\n\n原始指令：${command}\n优化后：${optimizedCommand}\n\n优化说明：${suggestions.join('、')}`
+            text: `指令优化完成：\n\n原始指令：${command} \n优化后：${optimizedCommand} `
         }]
     };
 }
 
 // 基本优化逻辑
-function basicOptimization(command: string, context?: string, level: string = 'medium'): string {
+function basicOptimization(command: string, context?: string): string {
     let optimizedCommand = command;
-    
-    // 基于优化级别提供不同的优化建议
-    if (level === 'high') {
-        // 高级优化：添加详细上下文和具体要求
-        if (context && optimizationSettings.includeProjectInfo) {
-            optimizedCommand = `${command}\n\n上下文信息：${context}`;
-        }
-    } else if (level === 'medium') {
-        // 中级优化：基本结构化
-        if (!command.includes('请') && !command.includes('帮助')) {
-            optimizedCommand = `请${command}`;
-        }
+
+    if (context) {
+        optimizedCommand = `${command} \n\n上下文信息：${context} `;
+    } else if (!command.includes('请') && !command.includes('帮助')) {
+        optimizedCommand = `请${command} `;
     }
-    
+
     return optimizedCommand;
 }
 
-// 调用智谱AI进行指令优化
-async function callZhipuAI(command: string, context?: string, level: string = 'medium'): Promise<string> {
-    if (!optimizationSettings.apiKey) {
+async function callZhipuAI(command: string, context?: string): Promise<string> {
+    const config = getUnifiedConfig();
+    if (!config.apiKey) {
         throw new Error('未配置API Key');
     }
-    
-    // 构建优化提示词
-    let prompt = optimizationSettings.optimizationRules.replace('{instruction}', command);
-    
-    if (context && optimizationSettings.includeProjectInfo) {
-        prompt += `\n\n项目上下文：${context}`;
-    }
-    
-    // 调用智谱AI API
-    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${optimizationSettings.apiKey}`
-        },
-        body: JSON.stringify({
-            model: optimizationSettings.model,
-            messages: [
-                {
-                    role: 'user',
-                    content: prompt
+
+    const model = config.model || 'GLM-4.5-Flash';
+    const prompt = `你是一个专业的开发者工具指令美化专家。请将以下用户输入的原始指令优化为更专业、描述更清晰、更符合 AI 助手执行的描述。\n原始指令：${command} \n要求：\n1.保持原意。\n2.扩写细节。\n3.只返回优化后的指令文本。`;
+
+    const data = JSON.stringify({
+        model: model,
+        messages: [{ role: 'user', content: prompt + (context ? `\n\n项目上下文：${context} ` : '') }],
+        stream: false
+    });
+
+    return new Promise((resolve, reject) => {
+        const https = require('https');
+        const options = {
+            hostname: 'open.bigmodel.cn',
+            port: 443,
+            path: '/api/paas/v4/chat/completions',
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${config.apiKey}`,
+                'Content-Type': 'application/json',
+                'Content-Length': data.length
+            }
+        };
+
+        const req = https.request(options, (res: any) => {
+            let resData = '';
+            res.on('data', (chunk: any) => resData += chunk);
+            res.on('end', () => {
+                try {
+                    const parsed = JSON.parse(resData);
+                    if (parsed.choices && parsed.choices.length > 0) {
+                        resolve(parsed.choices[0].message.content.trim());
+                    } else {
+                        reject(new Error(parsed.error?.message || 'API 响应异常'));
+                    }
+                } catch (e) {
+                    reject(new Error('响应解析失败'));
                 }
-            ],
-            temperature: 0.7,
-            max_tokens: 1000
-        })
+            });
+        });
+
+        req.on('error', (error: any) => {
+            reject(new Error(`请求失败: ${error.message}`));
+        });
+
+        req.write(data);
+        req.end();
     });
     
-    if (!response.ok) {
-        const errorData = await response.json().catch(() => ({})) as any;
-        throw new Error(`API调用失败: ${response.status} ${errorData.error?.message || response.statusText}`);
-    }
-    
-    const data = await response.json() as any;
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-        throw new Error('API返回数据格式错误');
-    }
-    
-    return data.choices[0].message.content.trim();
+    saveOptimizationData();
 }
 
 export async function handleSaveCommandHistory(args: any): Promise<any> {
-    const { command, optimized, context, success } = args;
-    
-    const historyEntry = {
-        id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        command: command,
-        timestamp: Date.now(),
-        optimized: optimized || '',
-        context: context || '',
-        success: success
-    };
-    
-    commandHistory.unshift(historyEntry);
-    
-    // 限制历史记录数量
-    if (commandHistory.length > 100) {
-        commandHistory = commandHistory.slice(0, 100);
-    }
-    
-    saveOptimizationData();
-    
-    return {
-        content: [{
-            type: 'text',
-            text: `指令历史已保存：${command}`
-        }]
-    };
+    const { command } = args;
+    addCommandToHistory(command);
+    return { content: [{ type: 'text', text: `历史指令已保存` }] };
 }
 
 export async function handleGetCommandHistory(args: any): Promise<any> {
-    const { limit = 10, filter } = args;
-    
-    let filteredHistory = commandHistory;
-    
-    // 应用过滤器
-    if (filter) {
-        filteredHistory = commandHistory.filter(entry => 
-            entry.command.toLowerCase().includes(filter.toLowerCase()) ||
-            (entry.optimized && entry.optimized.toLowerCase().includes(filter.toLowerCase()))
-        );
-    }
-    
-    // 限制返回数量
-    const limitedHistory = filteredHistory.slice(0, limit);
-    
-    const historyText = limitedHistory.map((entry, index) => {
-        const date = new Date(entry.timestamp).toLocaleString('zh-CN');
-        const status = entry.success ? '✓' : '✗';
-        let text = `${index + 1}. [${status}] ${date}\n   指令：${entry.command}`;
-        if (entry.optimized && entry.optimized !== entry.command) {
-            text += `\n   优化：${entry.optimized}`;
-        }
-        if (entry.context) {
-            text += `\n   上下文：${entry.context.substring(0, 100)}${entry.context.length > 100 ? '...' : ''}`;
-        }
-        return text;
-    }).join('\n\n');
-    
+    const { limit = 10 } = args;
+    const limitedHistory = commandHistory.slice(0, limit);
+    const historyText = limitedHistory.map((cmd, index) => `${index + 1}. ${cmd.text} `).join('\n');
     return {
         content: [{
             type: 'text',
-            text: `历史指令记录（共${filteredHistory.length}条，显示${limitedHistory.length}条）：\n\n${historyText || '暂无历史记录'}`
+            text: `历史指令记录：\n\n${historyText || '暂无历史记录'} `
         }]
     };
+}
+
+export function setContextSummary(summary: string) {
+    contextSummary = summary;
+    saveOptimizationData();
 }
 
 export async function handleUpdateContextSummary(args: any): Promise<any> {
-    const { projectName, projectType, technologies, currentTask } = args;
-    
-    if (projectName) contextSummary.projectName = projectName;
-    if (projectType) contextSummary.projectType = projectType;
-    if (technologies) contextSummary.mainTechnologies = technologies;
-    if (currentTask) contextSummary.currentTask = currentTask;
-    
-    contextSummary.lastUpdate = Date.now();
-    
-    saveOptimizationData();
-    
+    const { summary } = args;
+    setContextSummary(summary || '');
+    return { content: [{ type: 'text', text: `上下文摘要已更新` }] };
+}
+
+export async function handleGetContextSummary(args: any): Promise<any> {
     return {
         content: [{
             type: 'text',
-            text: `上下文摘要已更新：\n项目：${contextSummary.projectName}\n类型：${contextSummary.projectType}\n技术栈：${contextSummary.mainTechnologies.join(', ')}\n当前任务：${contextSummary.currentTask}`
+            text: `项目上下文摘要：\n\n${contextSummary || '未设置'} `
         }]
     };
 }
 
-export async function handleGetContextSummary(args: any): Promise<any> {
-    const lastUpdateText = contextSummary.lastUpdate 
-        ? new Date(contextSummary.lastUpdate).toLocaleString('zh-CN')
-        : '未知';
+export async function handleGetPendingCommand(): Promise<any> {
+    const command = getPendingCommand();
+    
+    if (command) {
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `WindsurfAutoMcp中有待处理的指令：\n\n${command}\n\n请执行此指令。`
+                }
+            ]
+        };
+    } else {
+        return {
+            content: [
+                {
+                    type: 'text', 
+                    text: 'WindsurfAutoMcp中暂无待处理的指令。'
+                }
+            ]
+        };
+    }
+}
+
+export async function handleSetPendingCommand(args: any): Promise<any> {
+    const { command } = args;
+    
+    if (!command) {
+        throw new Error('缺少必需的参数: command');
+    }
+    
+    setPendingCommand(command);
     
     return {
-        content: [{
-            type: 'text',
-            text: `项目上下文摘要：\n\n项目名称：${contextSummary.projectName || '未设置'}\n项目类型：${contextSummary.projectType || '未设置'}\n主要技术：${contextSummary.mainTechnologies.join(', ') || '未设置'}\n当前任务：${contextSummary.currentTask || '未设置'}\n最后更新：${lastUpdateText}`
-        }]
+        content: [
+            {
+                type: 'text',
+                text: `已设置待处理指令：${command}`
+            }
+        ]
     };
 }
 
@@ -375,18 +400,19 @@ export function saveOptimizationData() {
 
 // 加载优化相关数据
 export function loadOptimizationData(context: vscode.ExtensionContext) {
-    const savedOptSettings = context.globalState.get<typeof optimizationSettings>('optimizationSettings');
+    const savedOptSettings = context.globalState.get<any>('optimizationSettings');
     if (savedOptSettings) {
         optimizationSettings = { ...optimizationSettings, ...savedOptSettings };
     }
-    
-    const savedHistory = context.globalState.get<typeof commandHistory>('commandHistory');
+
+    const savedHistory = context.globalState.get<any[]>('commandHistory');
     if (savedHistory) {
-        commandHistory = savedHistory;
+        // 平滑处理：如果是旧的字符串数组，转换为对象数组
+        commandHistory = savedHistory.map(item => typeof item === 'string' ? { text: item, timestamp: Date.now() } : item);
     }
-    
-    const savedContext = context.globalState.get<typeof contextSummary>('contextSummary');
+
+    const savedContext = context.globalState.get<string>('contextSummary');
     if (savedContext) {
-        contextSummary = { ...contextSummary, ...savedContext };
+        contextSummary = savedContext;
     }
 }
